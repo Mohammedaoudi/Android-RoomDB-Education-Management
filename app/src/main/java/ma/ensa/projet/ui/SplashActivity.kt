@@ -34,8 +34,8 @@ class SplashActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             // Initialize the database
-            AppDatabase.initializeDatabase(this@SplashActivity) // Ensure this method is defined in your database class
-            loadInitialData() // Load initial data after database initialization
+//            AppDatabase.initializeDatabase(this@SplashActivity) // Ensure this method is defined in your database class
+//            loadInitialData() // Load initial data after database initialization
 
             // Display the splash screen for 3 seconds
             delay(3000)

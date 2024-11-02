@@ -22,7 +22,6 @@ import java.util.Calendar
         Classe::class,
         Lecturer::class,
         Major::class,
-        Score::class,
         Semester::class,
         Student::class,
         Subject::class,
@@ -42,9 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun crossRefDAO(): CrossRefDAO
     abstract fun lecturerDAO(): LecturerDAO
     abstract fun majorDAO(): MajorDAO
-    abstract fun scoreDAO(): ScoreDAO
     abstract fun semesterDAO(): SemesterDAO
-    abstract fun statisticalDAO(): StatisticalDAO
     abstract fun studentDAO(): StudentDAO
     abstract fun subjectDAO(): SubjectDAO
     abstract fun userDAO(): UserDAO

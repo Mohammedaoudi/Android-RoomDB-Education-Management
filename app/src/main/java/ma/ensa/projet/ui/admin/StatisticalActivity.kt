@@ -1,5 +1,7 @@
 package ma.ensa.projet.ui.admin
 
+import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Bundle
 import android.widget.ImageView
 import android.widget.Toast
@@ -50,34 +52,38 @@ class StatisticalActivity : AppCompatActivity() {
             try {
                 // Fetch all students on a background thread
                 val students = withContext(Dispatchers.IO) {
-                    studentDAO.getAll() // Ensure this method returns a list of StudentWithRelations
+                    studentDAO.getAll()
                 }
 
                 // Fetch distinct majors and lecturers
                 val majorCount = withContext(Dispatchers.IO) {
-                    majorDAO.getAll().size // Assuming getAll() returns a list of majors
+                    majorDAO.getAll().size
                 }
 
                 val lecturerCount = withContext(Dispatchers.IO) {
-                    lecturerDAO.getAll().size // Assuming getAll() returns a list of lecturers
+                    lecturerDAO.getAll().size
                 }
 
                 val studentCount = students.size
 
                 // Prepare entries for the chart
-                val entries = arrayListOf<BarEntry>(
+                val entries = arrayListOf(
                     BarEntry(0f, studentCount.toFloat()), // Students
                     BarEntry(1f, majorCount.toFloat()),   // Majors
                     BarEntry(2f, lecturerCount.toFloat()) // Lecturers
                 )
 
-                // Create dataset and configure it with different colors
+                // Create dataset and configure it with different colors and text style
                 val dataSet = BarDataSet(entries, "Statistics").apply {
                     colors = listOf(
                         resources.getColor(R.color.blue),  // Color for Students
                         resources.getColor(R.color.green), // Color for Majors
                         resources.getColor(R.color.red)    // Color for Lecturers
                     )
+                    valueTextColor = Color.WHITE
+                    valueTextSize = 16f // Larger font size
+                    valueTypeface = Typeface.DEFAULT_BOLD // Bold text
+
                     valueFormatter = object : ValueFormatter() {
                         override fun getBarLabel(barEntry: BarEntry?): String {
                             return when (barEntry?.x?.toInt()) {
@@ -92,11 +98,23 @@ class StatisticalActivity : AppCompatActivity() {
 
                 // Update the chart on the main thread
                 val barData = BarData(dataSet)
-                barChart.data = barData
-                barChart.invalidate() // Refresh chart
+                barChart.apply {
+                    data = barData
+                    setDrawValueAboveBar(true)
+                    description.isEnabled = false
+                    setFitBars(true)
+                    legend.textColor = Color.WHITE
+                    axisLeft.textColor = Color.WHITE
+                    axisLeft.textSize = 14f
+                    axisLeft.typeface = Typeface.DEFAULT_BOLD
+                    xAxis.textColor = Color.WHITE
+                    xAxis.textSize = 14f
+                    xAxis.typeface = Typeface.DEFAULT_BOLD
+                    axisRight.isEnabled = false
+                    invalidate() // Refresh chart
+                }
 
             } catch (e: Exception) {
-                // Handle exceptions (e.g., database access issues)
                 Toast.makeText(this@StatisticalActivity, "Error loading data: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
