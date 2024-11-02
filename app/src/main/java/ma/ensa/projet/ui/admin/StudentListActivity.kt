@@ -439,7 +439,6 @@ class StudentListActivity : AppCompatActivity() {
                 // Update UI on main thread
                 withContext(Dispatchers.Main) {
                     studentListRecycleViewAdapter?.addStudent(studentWithRelations)
-                    Utils.showToast(this@StudentListActivity, "Successfully added student!")
                     bottomSheetDialog?.dismiss()
 
                     // Reset image-related variables

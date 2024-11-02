@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.widget.Filter
 import android.widget.Filterable
 import android.widget.TextView
+import android.widget.Toast
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,6 +18,7 @@ import ma.ensa.projet.R
 import ma.ensa.projet.adapters.admin.listener.ItemClickListener
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.entities.Semester
+import ma.ensa.projet.ui.prof.StudentsInClassActivity
 import ma.ensa.projet.utilities.Utils
 import java.util.Locale
 
@@ -77,10 +79,35 @@ class SemesterRecyclerViewAdapter(
     override fun onBindViewHolder(holder: SemesterViewHolder, position: Int) {
         val semester = filteredList[position]
         val majorName = majorMap[semester.id] ?: "Unknown Major"
-        val className = classMap[semester.id] ?: "Unknown Class"
 
-        holder.txtSemesterName.text = "${semester.name} - $majorName : $className"
+        holder.txtSemesterName.text = "${semester.name} - $majorName"
         holder.txtSubjects.text = subjectMap[semester.id]?.joinToString(", ") ?: "No subjects"
+
+        // Handle item click to show students of the class
+        holder.itemView.setOnClickListener {
+            coroutineScope.launch(Dispatchers.IO) {
+                // Fetch subjects for the clicked semester to get classId
+                val subjects = AppDatabase.getInstance(context).subjectDAO().getBySemester(semester.id)
+                if (subjects.isNotEmpty()) {
+                    // Assuming you want to get the classId from the first subject
+                    val classId = subjects[0].clazz.id // or handle it differently if needed
+
+                    // Fetch the class name (if needed, depending on your implementation)
+                    val classEntity = AppDatabase.getInstance(context).classDAO().getById(classId)
+                    val className = classEntity?.name ?: "Unknown Class"
+
+                    // Start the StudentListActivity with the classId
+                    val intent = Intent(context, StudentsInClassActivity::class.java)
+                    intent.putExtra("CLASS_ID", classId) // Pass the class ID to the next activity
+                    context.startActivity(intent)
+                } else {
+                    // Handle case where there are no subjects
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "No subjects found for this semester", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
     }
 
     override fun getItemCount(): Int = filteredList.size

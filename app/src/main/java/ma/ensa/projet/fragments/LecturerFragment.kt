@@ -56,7 +56,6 @@ class LecturerFragment : Fragment() {
 
     private fun initLecturerView(view: View) {
         btnToSemester = view.findViewById(R.id.btnToSemester)
-        btnToStatistical = view.findViewById(R.id.btnToStatistical)
     }
 
     private fun handleEventListener() {

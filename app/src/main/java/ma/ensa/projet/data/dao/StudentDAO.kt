@@ -7,7 +7,6 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import ma.ensa.projet.data.dto.StudentWithRelations
-import ma.ensa.projet.data.dto.StudentWithScores
 import ma.ensa.projet.data.entities.Student
 
 
@@ -46,6 +45,10 @@ interface StudentDAO {
         ORDER BY u.full_name
     """)
     fun getByClass(classId: Long): List<StudentWithRelations>
+
+
+    @Query("SELECT * FROM students WHERE class_id = :classId ORDER BY id DESC")
+    fun getByClassSL(classId: Long): List<Student>
 
     @Query("""
         SELECT s.* FROM students s 
