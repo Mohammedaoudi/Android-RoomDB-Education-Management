@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/grey"
+    tools:ignore="HardcodedText">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginVertical="10dp"
+        android:background="@drawable/round_back_white_setting"
+        android:orientation="vertical"
+        android:padding="15dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            tools:ignore="UselessParent">
+
+            <ImageView
+                android:id="@+id/iconSemester"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/circle_red"
+                android:contentDescription="ic_sesmester"
+                android:padding="6dp"
+                android:src="@drawable/ic_sesmester" />
+
+
+            <TextView
+                android:id="@+id/txtSubjects"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="22dp"
+                android:fontFamily="@font/opensans_regular"
+                android:text="Subjects: "
+                android:textColor="@color/white"
+                android:layout_toEndOf="@+id/iconSemester"
+                android:layout_centerVertical="true"
+
+                android:textSize="14sp" />
+
+
+            <TextView
+                android:id="@+id/txtSemesterName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_marginStart="22dp"
+                android:layout_toEndOf="@+id/txtSubjects"
+                android:text="ssssssssssssssss"
+                android:fontFamily="@font/opensans_bold"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+        </RelativeLayout>
+
+    </LinearLayout>
+
+</LinearLayout>
