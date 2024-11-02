@@ -34,7 +34,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="22dp"
-                android:fontFamily="@font/opensans_regular"
+                android:fontFamily="@font/opensans_semibold"
                 android:text="Subjects: "
                 android:textColor="@color/white"
                 android:layout_toEndOf="@+id/iconSemester"

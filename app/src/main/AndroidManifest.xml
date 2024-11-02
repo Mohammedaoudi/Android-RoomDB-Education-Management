@@ -44,21 +44,11 @@
         <activity
             android:name=".ui.admin.StatisticalActivity"
             android:exported="false" />
-        <activity
-            android:name=".ui.admin.StatisticalScoreActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.admin.StatisticalLecturerActivity"
-            android:exported="false" />
-        <activity
-            android:name=".ui.admin.StatisticalClassActivity"
-            android:exported="false" />
+
         <activity
             android:name=".ui.admin.FeatureActivity"
             android:exported="false" />
-        <activity
-            android:name=".ui.admin.StatisticalSubjectActivity"
-            android:exported="false" />
+
 
         <activity
             android:name=".ui.HomeActivity"

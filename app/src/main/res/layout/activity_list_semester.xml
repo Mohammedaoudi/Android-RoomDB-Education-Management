@@ -43,7 +43,8 @@
         android:background="@drawable/search_view_bg"
         app:closeIcon="@drawable/ic_close"
         app:iconifiedByDefault="false"
-        app:queryHint="Enter Semester..."
+
+        app:queryHint="Enter Subject(module)..."
         app:searchIcon="@drawable/ic_search" />
 
     <LinearLayout

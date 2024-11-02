@@ -17,10 +17,9 @@ import ma.ensa.projet.R
 import ma.ensa.projet.adapters.admin.listener.ItemClickListener
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.entities.Semester
-import ma.ensa.projet.ui.admin.SubjectListActivity
-import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
 import java.util.Locale
+
 class SemesterRecyclerViewAdapter(
     private val context: Context,
     private val intent: Intent,
@@ -31,21 +30,42 @@ class SemesterRecyclerViewAdapter(
     private val originalList: ArrayList<Semester> = semesters
     private var filteredList: ArrayList<Semester> = semesters
     private var subjectMap: Map<Long, List<String>> = emptyMap() // Mapping of semester ID to subject names
+    private var majorMap: Map<Long, String> = emptyMap() // Mapping of semester ID to major name
+    private var classMap: Map<Long, String> = emptyMap() // Mapping of semester ID to class name
 
     init {
-        // Load subjects for each semester initially
-        loadSubjects()
+        // Load subjects, major names, and class names for each semester initially
+        loadSubjectsAndNames()
     }
 
-    private fun loadSubjects() {
+    private fun loadSubjectsAndNames() {
         coroutineScope.launch(Dispatchers.IO) {
             val tempSubjectMap = mutableMapOf<Long, List<String>>()
+            val tempMajorMap = mutableMapOf<Long, String>()
+            val tempClassMap = mutableMapOf<Long, String>()
+            val db = AppDatabase.getInstance(context)
+
             for (semester in originalList) {
-                val subjects = AppDatabase.getInstance(context).subjectDAO().getBySemester(semester.id)
+                // Fetch subjects for each semester
+                val subjects = db.subjectDAO().getBySemester(semester.id)
                 val subjectNames = subjects.map { it.subject.name }
                 tempSubjectMap[semester.id] = subjectNames
+
+                // Fetch and store major name for each semester's major ID
+                val major = semester.majorId?.let { db.majorDAO().getById(it) }
+                tempMajorMap[semester.id] = major?.name ?: "Unknown Major"
+
+                // Fetch and store class name for each subject’s class ID in the semester
+                val classEntity = subjects.firstOrNull()?.subject?.classId?.let { db.classDAO().getById(it) }
+                tempClassMap[semester.id] = classEntity?.name ?: "Unknown Class"
             }
             subjectMap = tempSubjectMap
+            majorMap = tempMajorMap
+            classMap = tempClassMap
+
+            withContext(Dispatchers.Main) {
+                notifyDataSetChanged()
+            }
         }
     }
 
@@ -56,13 +76,11 @@ class SemesterRecyclerViewAdapter(
 
     override fun onBindViewHolder(holder: SemesterViewHolder, position: Int) {
         val semester = filteredList[position]
-        holder.txtSemesterName.text = semester.name // No need to load major name here
-        holder.txtSubjects.text = "Loading subjects..."
+        val majorName = majorMap[semester.id] ?: "Unknown Major"
+        val className = classMap[semester.id] ?: "Unknown Class"
 
-        // Set subjects from the pre-loaded map
-        holder.txtSubjects.text = "Subject(module): ${subjectMap[semester.id]?.joinToString(", ") ?: "No subjects"}"
-
-
+        holder.txtSemesterName.text = "${semester.name} - $majorName : $className"
+        holder.txtSubjects.text = subjectMap[semester.id]?.joinToString(", ") ?: "No subjects"
     }
 
     override fun getItemCount(): Int = filteredList.size
@@ -74,16 +92,18 @@ class SemesterRecyclerViewAdapter(
                 val results = FilterResults()
 
                 if (query != null) {
-                    if (query.isNotEmpty()) {
-                        filteredList = originalList.filter { semester ->
+                    filteredList = if (query.isNotEmpty()) {
+                        originalList.filter { semester ->
                             val subjects = subjectMap[semester.id] ?: emptyList()
                             subjects.any { subjectName ->
-                                Utils.removeVietnameseAccents(subjectName.lowercase(Locale.getDefault()))
-                                    ?.contains(query)!!
+                                query?.let {
+                                    Utils.removeVietnameseAccents(subjectName.lowercase(Locale.getDefault()))
+                                        ?.contains(it)
+                                } == true
                             }
                         } as ArrayList<Semester>
                     } else {
-                        filteredList = originalList
+                        originalList
                     }
                 }
 
@@ -123,4 +143,3 @@ class SemesterRecyclerViewAdapter(
         }
     }
 }
-
