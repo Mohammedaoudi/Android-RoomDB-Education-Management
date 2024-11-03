@@ -132,6 +132,27 @@ class StudentListRecycleViewAdapter(
         }
     }
 
+    fun deleteStudent(position: Int) {
+        // Launch a coroutine to perform the deletion asynchronously
+        CoroutineScope(Dispatchers.IO).launch {
+            val studentWithRelations: StudentWithRelations = filteredList[position]
+
+            // Directly access the student and user properties and perform the deletions
+            val studentDAO = AppDatabase.getInstance(context)?.studentDAO()
+            val userDAO = AppDatabase.getInstance(context)?.userDAO()
+
+            studentDAO?.delete(studentWithRelations.student)
+            userDAO?.delete(studentWithRelations.user)
+
+            // Update the original and filtered lists on the main thread
+            withContext(Dispatchers.Main) {
+                originalList.remove(studentWithRelations)
+                filteredList.remove(studentWithRelations)
+                filter.filter(currentFilterText)
+                notifyItemRemoved(position)
+            }
+        }
+    }
 
     override fun getItemCount(): Int = filteredList.size
 
@@ -245,27 +266,6 @@ class StudentListRecycleViewAdapter(
         }
     }
 
-    private fun deleteStudent(position: Int) {
-        // Launch a coroutine to perform the deletion asynchronously
-        CoroutineScope(Dispatchers.IO).launch {
-            val studentWithRelations: StudentWithRelations = filteredList[position]
-
-            // Directly access the student and user properties and perform the deletions
-            val studentDAO = AppDatabase.getInstance(context)?.studentDAO()
-            val userDAO = AppDatabase.getInstance(context)?.userDAO()
-
-            studentDAO?.delete(studentWithRelations.student)
-            userDAO?.delete(studentWithRelations.user)
-
-            // Update the original and filtered lists on the main thread
-            withContext(Dispatchers.Main) {
-                originalList.remove(studentWithRelations)
-                filteredList.remove(studentWithRelations)
-                filter.filter(currentFilterText)
-                notifyItemRemoved(position)
-            }
-        }
-    }
 
 
     private suspend fun fetchNames() {

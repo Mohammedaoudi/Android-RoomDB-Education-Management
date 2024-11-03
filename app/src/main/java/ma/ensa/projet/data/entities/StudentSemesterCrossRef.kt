@@ -25,7 +25,6 @@ import androidx.room.PrimaryKey
 data class StudentSemesterCrossRef(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
-    var gpa: Float = 0f,
     var totalCredits: Float = 0f,
     @ColumnInfo(name = "student_id")
     var studentId: Long,

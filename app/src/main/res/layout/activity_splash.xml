@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
-    android:background="@color/white"
+    android:background="@color/grey"
     tools:context=".ui.SplashActivity">
 
     <ImageView
@@ -14,7 +14,9 @@
         android:layout_width="150dp"
         android:layout_height="150dp"
         android:src="@drawable/logoappp"
+        app:tint="@color/white"
         android:alpha="0"
+
         android:contentDescription="App Logo"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -23,13 +25,14 @@
         app:layout_constraintVertical_bias="0.3" />
 
     <TextView
+        android:layout_margin="25dp"
         android:id="@+id/appTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:fontFamily="sans-serif-condensed"
-        android:text="Students Managemnt APP"
-        android:textColor="@color/black"
+        android:fontFamily="@font/opensans_semibold"
+        android:text="ENSAJ Managemnt APP"
+        android:textColor="@color/white"
         android:textSize="28sp"
         android:alpha="0"
         app:layout_constraintEnd_toEndOf="parent"
@@ -42,8 +45,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="32dp"
         android:indeterminate="true"
-        app:indicatorColor="@color/design_default_color_primary"
-        app:trackColor="@color/design_default_color_primary_variant"
+        app:indicatorColor="@color/brown"
+        app:trackColor="@color/white"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/appTitle" />

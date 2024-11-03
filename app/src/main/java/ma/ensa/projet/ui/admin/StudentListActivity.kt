@@ -5,7 +5,10 @@ import android.app.DatePickerDialog
 import android.content.DialogInterface
 import android.content.Intent
 import android.database.sqlite.SQLiteConstraintException
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ImageDecoder
+import android.graphics.Paint
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -25,6 +28,7 @@ import androidx.appcompat.widget.SearchView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 
@@ -94,6 +98,7 @@ class StudentListActivity : AppCompatActivity() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
+        setupSwipeToDelete() // Add this line to initialize swipe-to-delete functionality
 
         initAddStudentView()
         handleEventListener()
@@ -250,6 +255,82 @@ class StudentListActivity : AppCompatActivity() {
         }
     }
 
+
+    private fun setupSwipeToDelete() {
+        val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                // Move operation not needed, return false
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.adapterPosition
+
+                // Show confirmation dialog
+                AlertDialog.Builder(this@StudentListActivity).apply {
+                    setTitle("Delete Confirmation")
+                    setMessage("Are you sure you want to delete this student?")
+                    setPositiveButton("Delete") { _, _ ->
+                        // If confirmed, delete the student
+                        studentListRecycleViewAdapter?.deleteStudent(position)
+                    }
+                    setNegativeButton("Cancel") { dialog, _ ->
+                        // If canceled, restore the item
+                        dialog.dismiss()
+                        studentListRecycleViewAdapter?.notifyItemChanged(position)
+                    }
+                    setCancelable(false)
+                    create()
+                    show()
+                }
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
+                    // Draw red background
+                    val paint = Paint()
+                    paint.color = Color.RED
+                    val itemView = viewHolder.itemView
+                    if (dX > 0) {
+                        // Swiping to the right
+                        c.drawRect(
+                            itemView.left.toFloat(),
+                            itemView.top.toFloat(),
+                            itemView.left + dX,
+                            itemView.bottom.toFloat(),
+                            paint
+                        )
+                    } else {
+                        // Swiping to the left
+                        c.drawRect(
+                            itemView.right + dX,
+                            itemView.top.toFloat(),
+                            itemView.right.toFloat(),
+                            itemView.bottom.toFloat(),
+                            paint
+                        )
+                    }
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+        }
+
+        // Attach ItemTouchHelper to RecyclerView
+        val rvStudent = findViewById<RecyclerView>(R.id.rvStudent)
+        ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(rvStudent)
+    }
 
 
     @SuppressLint("InflateParams")
