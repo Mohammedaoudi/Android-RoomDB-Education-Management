@@ -18,7 +18,7 @@ data class StudentWithRelations(
     @Relation(parentColumn = "academic_year_id", entityColumn = "id")
     val academicYear: AcademicYear,
     @Relation(parentColumn = "class_id", entityColumn = "id")
-    val clazz: Classe,
+    val clazz: Classe?,
     @Relation(parentColumn = "user_id", entityColumn = "id")
     var user: User
 )
