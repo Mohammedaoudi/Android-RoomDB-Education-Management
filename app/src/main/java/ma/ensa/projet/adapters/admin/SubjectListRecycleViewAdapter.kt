@@ -43,17 +43,17 @@ class SubjectListRecycleViewAdapter(
 ) : RecyclerView.Adapter<SubjectListRecycleViewAdapter.SubjectViewHolder>(), Filterable {
 
     private val bottomSheetDialog = BottomSheetDialog(context)
-    private var selectedMajor: Major? = null // Currently selected major
-    private var majors = ArrayList<Major>() // List of all majors
-    private lateinit var majorNames: Array<String> // Array of major names for selection
+    private var selectedMajor: Major? = null
+    private var majors = ArrayList<Major>()
+    private lateinit var majorNames: Array<String>
 
-    private var selectedClass: Classe? = null // Currently selected class
-    private var classes = ArrayList<Classe>() // List of all classes
-    private lateinit var classNames: ArrayList<String> // Array of class names for selection
+    private var selectedClass: Classe? = null
+    private var classes = ArrayList<Classe>()
+    private lateinit var classNames: ArrayList<String>
 
-    private var selectedSemesterId: Long? = null // Currently selected semester
-    private var semesters = ArrayList<Semester>() // List of all semesters
-    private lateinit var semesterNames: Array<String> // Array of semester names for selection
+    private var selectedSemesterId: Long? = null
+    private var semesters = ArrayList<Semester>()
+    private lateinit var semesterNames: Array<String>
 
 
     private var filteredList: ArrayList<SubjectWithRelations> = originalList
@@ -62,7 +62,6 @@ class SubjectListRecycleViewAdapter(
 
 
     init {
-        // Initialize data (consider this if you want it done during adapter creation)
         fetchInitialData()
     }
 
@@ -190,9 +189,9 @@ class SubjectListRecycleViewAdapter(
         edtClassName.setText(subjectWithRelations.clazz.name)
         edtMajorName.setText(subjectWithRelations.major.name)
 
-        // Initialize selectedSemesterId
         selectedSemesterId = subjectWithRelations.semesterId
         edtSemesterName.setText(semesters.find { it.id == selectedSemesterId }?.name)
+        Log.d("tatatt", edtSemesterName.text.toString())
 
         // Initially disable class and semester selection until a major is selected
         edtClassName.isEnabled = false
@@ -220,8 +219,6 @@ class SubjectListRecycleViewAdapter(
             }
         }
 
-        // Class selection
-// Class selection
         edtClassName.setOnClickListener {
             if (selectedMajor == null) {
                 Utils.showToast(context, "Please select a major first")

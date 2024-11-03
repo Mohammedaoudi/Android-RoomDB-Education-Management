@@ -31,7 +31,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-
 import com.github.dhaval2404.imagepicker.ImagePicker
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -60,7 +59,6 @@ class StudentListActivity : AppCompatActivity() {
     private var semesters: ArrayList<Semester>? = null
     private var semesterNames: ArrayList<String>? = null
     private var selectedSemesterId: Long = 0
-    private var subjects: ArrayList<SubjectWithRelations>? = null
     private var subjectNames: ArrayList<String>? = null
     private var selectedSubjectId: Long = 0
     private var majors: ArrayList<Major>? = null
@@ -82,7 +80,6 @@ class StudentListActivity : AppCompatActivity() {
 
     private var bottomSheetDialog: BottomSheetDialog? = null
 
-
     var tempImageBytes: ByteArray? = null
     var currentAvatarImageView: ImageView? = null
     var isEditMode = false
@@ -98,10 +95,187 @@ class StudentListActivity : AppCompatActivity() {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
             insets
         }
-        setupSwipeToDelete() // Add this line to initialize swipe-to-delete functionality
+        setupSwipeToDelete()
 
         initAddStudentView()
         handleEventListener()
+    }
+
+    private fun setupSwipeToDelete() {
+        val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
+            override fun onMove(
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                target: RecyclerView.ViewHolder
+            ): Boolean {
+                // Move operation not needed, return false
+                return false
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                val position = viewHolder.adapterPosition
+
+                // Show confirmation dialog
+                AlertDialog.Builder(this@StudentListActivity).apply {
+                    setTitle("Delete Confirmation")
+                    setMessage("Are you sure you want to delete this student?")
+                    setPositiveButton("Delete") { _, _ ->
+                        // If confirmed, delete the student
+                        studentListRecycleViewAdapter?.deleteStudent(position)
+                    }
+                    setNegativeButton("Cancel") { dialog, _ ->
+                        // If canceled, restore the item
+                        dialog.dismiss()
+                        studentListRecycleViewAdapter?.notifyItemChanged(position)
+                    }
+                    setCancelable(false)
+                    create()
+                    show()
+                }
+            }
+
+            override fun onChildDraw(
+                c: Canvas,
+                recyclerView: RecyclerView,
+                viewHolder: RecyclerView.ViewHolder,
+                dX: Float,
+                dY: Float,
+                actionState: Int,
+                isCurrentlyActive: Boolean
+            ) {
+                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
+                    // Draw red background
+                    val paint = Paint()
+                    paint.color = Color.RED
+                    val itemView = viewHolder.itemView
+                    if (dX > 0) {
+                        // Swiping to the right
+                        c.drawRect(
+                            itemView.left.toFloat(),
+                            itemView.top.toFloat(),
+                            itemView.left + dX,
+                            itemView.bottom.toFloat(),
+                            paint
+                        )
+                    } else {
+                        // Swiping to the left
+                        c.drawRect(
+                            itemView.right + dX,
+                            itemView.top.toFloat(),
+                            itemView.right.toFloat(),
+                            itemView.bottom.toFloat(),
+                            paint
+                        )
+                    }
+                }
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+            }
+        }
+
+        // Attach ItemTouchHelper to RecyclerView
+        val rvStudent = findViewById<RecyclerView>(R.id.rvStudent)
+        ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(rvStudent)
+    }
+
+    private fun initAddStudentView() {
+        layoutStudent = findViewById(R.id.layoutStudent)
+        btnBack = findViewById(R.id.btnBack)
+        searchViewStudent = findViewById(R.id.searchViewStudent)
+        btnAddStudent = findViewById(R.id.btnAddStudent)
+        btnFilter = findViewById(R.id.btnFilter)
+        bottomSheetDialog = BottomSheetDialog(this)
+
+        lifecycleScope.launch {
+            // Fetch semesters asynchronously
+            semesters = withContext(Dispatchers.IO) {
+                ArrayList<Semester>(AppDatabase.getInstance(this@StudentListActivity)?.semesterDAO()?.getAll() ?: emptyList())
+            }
+
+            semesterNames = ArrayList<String>(semesters!!.size + 1).apply {
+                for (semester in semesters!!) {
+                    val startDate = Utils.formatDate("MM/yyyy").format(semester.startDate)
+                    val endDate = Utils.formatDate("MM/yyyy").format(semester.endDate)
+                    val semesterName = String.format("%s (%s - %s)", semester.name, startDate, endDate)
+                    add(semesterName)
+                }
+            }
+
+            // Fetch majors asynchronously
+            majors = withContext(Dispatchers.IO) {
+                ArrayList<Major>(AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()?.getAll() ?: emptyList())
+            }
+
+
+            Log.d("DatabaseCheck", "All Majors: $majors")
+
+            majorNames = ArrayList<String>(majors!!.size + 1).apply {
+                for (major in majors!!) {
+                    major.name?.let { add(it) }
+                }
+            }
+
+            // Fetch classes asynchronously
+            classes = withContext(Dispatchers.IO) {
+                ArrayList<Classe>(AppDatabase.getInstance(this@StudentListActivity)?.classDAO()?.getAll() ?: emptyList())
+            }
+
+            classNames = ArrayList<String>(classes!!.size + 1).apply {
+                for (clazz in classes!!) {
+                    clazz.name?.let { add(it) }
+                }
+            }
+
+            Log.d("DatabaseCheck", "All classes: $classes")
+            // Fetch academic years asynchronously
+            academicYears = withContext(Dispatchers.IO) {
+                ArrayList<AcademicYear>(AppDatabase.getInstance(this@StudentListActivity)?.academicYearDAO()?.getAll() ?: emptyList())
+            }
+
+            academicYearNames = ArrayList<String>(academicYears!!.size + 1).apply {
+                for (academicYear in academicYears!!) {
+                    academicYear.name?.let { add(it) }
+                }
+            }
+
+            // Fetch students asynchronously
+            val students: ArrayList<StudentWithRelations> = withContext(Dispatchers.IO) {
+                ArrayList<StudentWithRelations>(AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()?.getAllWithRelations() ?: emptyList())
+            }
+
+            // Set up RecyclerView
+            studentListRecycleViewAdapter = StudentListRecycleViewAdapter(this@StudentListActivity, students)
+            val rvStudent = findViewById<RecyclerView>(R.id.rvStudent)
+            rvStudent.layoutManager = LinearLayoutManager(this@StudentListActivity)
+            rvStudent.adapter = studentListRecycleViewAdapter
+        }
+    }
+
+
+    @SuppressLint("InflateParams")
+    private fun handleEventListener() {
+        layoutStudent!!.setOnClickListener { v: View ->
+            if (v.id == R.id.layoutStudent) {
+                searchViewStudent!!.clearFocus()
+            }
+        }
+
+        btnBack!!.setOnClickListener { v: View? -> finish() }
+
+        searchViewStudent!!.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String): Boolean {
+                studentListRecycleViewAdapter?.getFilter()?.filter(query)
+                return false
+            }
+
+            override fun onQueryTextChange(newText: String): Boolean {
+                studentListRecycleViewAdapter?.getFilter()?.filter(newText)
+                return false
+            }
+        })
+
+        btnAddStudent!!.setOnClickListener { v: View? -> showAddStudentDialog() }
+
+        btnFilter!!.setOnClickListener { v: View? -> showFilterStudentDialog() }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -186,155 +360,6 @@ class StudentListActivity : AppCompatActivity() {
     }
 
 
-    private fun initAddStudentView() {
-        layoutStudent = findViewById(R.id.layoutStudent)
-        btnBack = findViewById(R.id.btnBack)
-        searchViewStudent = findViewById(R.id.searchViewStudent)
-        btnAddStudent = findViewById(R.id.btnAddStudent)
-        btnFilter = findViewById(R.id.btnFilter)
-        bottomSheetDialog = BottomSheetDialog(this)
-
-        lifecycleScope.launch {
-            // Fetch semesters asynchronously
-            semesters = withContext(Dispatchers.IO) {
-                ArrayList<Semester>(AppDatabase.getInstance(this@StudentListActivity)?.semesterDAO()?.getAll() ?: emptyList())
-            }
-
-            semesterNames = ArrayList<String>(semesters!!.size + 1).apply {
-                for (semester in semesters!!) {
-                    val startDate = Utils.formatDate("MM/yyyy").format(semester.startDate)
-                    val endDate = Utils.formatDate("MM/yyyy").format(semester.endDate)
-                    val semesterName = String.format("%s (%s - %s)", semester.name, startDate, endDate)
-                    add(semesterName)
-                }
-            }
-
-            // Fetch majors asynchronously
-            majors = withContext(Dispatchers.IO) {
-                ArrayList<Major>(AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()?.getAll() ?: emptyList())
-            }
-
-
-            Log.d("DatabaseCheck", "All Majors: $majors")
-
-            majorNames = ArrayList<String>(majors!!.size + 1).apply {
-                for (major in majors!!) {
-                    major.name?.let { add(it) }
-                }
-            }
-
-            // Fetch classes asynchronously
-            classes = withContext(Dispatchers.IO) {
-                ArrayList<Classe>(AppDatabase.getInstance(this@StudentListActivity)?.classDAO()?.getAll() ?: emptyList())
-            }
-
-            classNames = ArrayList<String>(classes!!.size + 1).apply {
-                for (clazz in classes!!) {
-                    clazz.name?.let { add(it) }
-                }
-            }
-
-            Log.d("DatabaseCheck", "All classes: $classes")
-            // Fetch academic years asynchronously
-            academicYears = withContext(Dispatchers.IO) {
-                ArrayList<AcademicYear>(AppDatabase.getInstance(this@StudentListActivity)?.academicYearDAO()?.getAll() ?: emptyList())
-            }
-
-            academicYearNames = ArrayList<String>(academicYears!!.size + 1).apply {
-                for (academicYear in academicYears!!) {
-                    academicYear.name?.let { add(it) }
-                }
-            }
-
-            // Fetch students asynchronously
-            val students: ArrayList<StudentWithRelations> = withContext(Dispatchers.IO) {
-                ArrayList<StudentWithRelations>(AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()?.getAllWithRelations() ?: emptyList())
-            }
-
-            // Set up RecyclerView
-            studentListRecycleViewAdapter = StudentListRecycleViewAdapter(this@StudentListActivity, students)
-            val rvStudent = findViewById<RecyclerView>(R.id.rvStudent)
-            rvStudent.layoutManager = LinearLayoutManager(this@StudentListActivity)
-            rvStudent.adapter = studentListRecycleViewAdapter
-        }
-    }
-
-
-    private fun setupSwipeToDelete() {
-        val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT) {
-            override fun onMove(
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
-            ): Boolean {
-                // Move operation not needed, return false
-                return false
-            }
-
-            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
-                val position = viewHolder.adapterPosition
-
-                // Show confirmation dialog
-                AlertDialog.Builder(this@StudentListActivity).apply {
-                    setTitle("Delete Confirmation")
-                    setMessage("Are you sure you want to delete this student?")
-                    setPositiveButton("Delete") { _, _ ->
-                        // If confirmed, delete the student
-                        studentListRecycleViewAdapter?.deleteStudent(position)
-                    }
-                    setNegativeButton("Cancel") { dialog, _ ->
-                        // If canceled, restore the item
-                        dialog.dismiss()
-                        studentListRecycleViewAdapter?.notifyItemChanged(position)
-                    }
-                    setCancelable(false)
-                    create()
-                    show()
-                }
-            }
-
-            override fun onChildDraw(
-                c: Canvas,
-                recyclerView: RecyclerView,
-                viewHolder: RecyclerView.ViewHolder,
-                dX: Float,
-                dY: Float,
-                actionState: Int,
-                isCurrentlyActive: Boolean
-            ) {
-                if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE) {
-                    // Draw red background
-                    val paint = Paint()
-                    paint.color = Color.RED
-                    val itemView = viewHolder.itemView
-                    if (dX > 0) {
-                        // Swiping to the right
-                        c.drawRect(
-                            itemView.left.toFloat(),
-                            itemView.top.toFloat(),
-                            itemView.left + dX,
-                            itemView.bottom.toFloat(),
-                            paint
-                        )
-                    } else {
-                        // Swiping to the left
-                        c.drawRect(
-                            itemView.right + dX,
-                            itemView.top.toFloat(),
-                            itemView.right.toFloat(),
-                            itemView.bottom.toFloat(),
-                            paint
-                        )
-                    }
-                }
-                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
-            }
-        }
-
-        // Attach ItemTouchHelper to RecyclerView
-        val rvStudent = findViewById<RecyclerView>(R.id.rvStudent)
-        ItemTouchHelper(itemTouchHelperCallback).attachToRecyclerView(rvStudent)
-    }
 
 
     @SuppressLint("InflateParams")
@@ -369,7 +394,6 @@ class StudentListActivity : AppCompatActivity() {
                 .setItems(majorNames!!.toTypedArray<CharSequence>()) { dialog: DialogInterface?, which: Int ->
                     selectedMajorId = majors!![which].id
                     (view.findViewById<View>(R.id.edtMajor) as EditText).setText(majorNames!![which])
-                    // Update classes based on selected major
                     updateClassesForMajor(selectedMajorId, view)
                 }
                 .show()
@@ -382,29 +406,22 @@ class StudentListActivity : AppCompatActivity() {
                 return@setOnClickListener // Exit the click listener if no major is selected
             }
 
-            // Log class data before displaying the dialog
-            Log.d("ClassesData", "Class Names: ${classNames?.joinToString()}")
-            Log.d("ClassesData", "Classes: ${classes?.joinToString { "ID: ${it.id}, Name: ${it.name}" }}")
 
             AlertDialog.Builder(this)
                 .setTitle("Select Class")
                 .setItems(classNames!!.toTypedArray<CharSequence>()) { dialog: DialogInterface?, which: Int ->
 
-                    // Get the ID from the name
                     selectedClassId = classes!!.first { it.name == classNames!![which] }.id
-                    Log.d("AddStudent", "Selected Class ID: $selectedClassId, Name: ${classNames!![which]}")
 
                     (view.findViewById<View>(R.id.edtClass) as EditText).setText(classNames!![which])
 
-                    // Automatically set the academic year based on the selected class
                     CoroutineScope(Dispatchers.IO).launch {
                         val selectedClass = AppDatabase.getInstance(this@StudentListActivity)
                             ?.classDAO()?.getById(selectedClassId)
 
                         if (selectedClass != null) {
-                            selectedAcademicYearId = selectedClass.academicYearId!! // Set the academic year
+                            selectedAcademicYearId = selectedClass.academicYearId!!
 
-                            // Fetch and set the academic year name on the main thread
                             val academicYearName = AppDatabase.getInstance(this@StudentListActivity)
                                 ?.academicYearDAO()?.getById(selectedAcademicYearId)?.name
 
@@ -432,7 +449,6 @@ class StudentListActivity : AppCompatActivity() {
         }
 
         bottomSheetDialog!!.setOnDismissListener {
-            // Reset image-related variables on dismiss
             tempImageBytes = null
             currentAvatarImageView = null
             isEditMode = false
@@ -558,34 +574,7 @@ class StudentListActivity : AppCompatActivity() {
             }
         }
     }
-    // You'll need these properties in your class
 
-    @SuppressLint("InflateParams")
-    private fun handleEventListener() {
-        layoutStudent!!.setOnClickListener { v: View ->
-            if (v.id == R.id.layoutStudent) {
-                searchViewStudent!!.clearFocus()
-            }
-        }
-
-        btnBack!!.setOnClickListener { v: View? -> finish() }
-
-        searchViewStudent!!.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String): Boolean {
-                studentListRecycleViewAdapter?.getFilter()?.filter(query)
-                return false
-            }
-
-            override fun onQueryTextChange(newText: String): Boolean {
-                studentListRecycleViewAdapter?.getFilter()?.filter(newText)
-                return false
-            }
-        })
-
-        btnAddStudent!!.setOnClickListener { v: View? -> showAddStudentDialog() }
-
-        btnFilter!!.setOnClickListener { v: View? -> showFilterStudentDialog() }
-    }
 
 
 
@@ -699,11 +688,6 @@ class StudentListActivity : AppCompatActivity() {
         }
     }
 
-    // Call this function when a major is selected to enable class selection
-
-    // Load all majors without filtering by academic year
-
-
 
     private fun loadClasses(majorId: Long) {
         lifecycleScope.launch {
@@ -724,8 +708,6 @@ class StudentListActivity : AppCompatActivity() {
 
 
 
-
-
     private fun showSelectionDialog(
         title: String,
         options: List<String>,
@@ -737,18 +719,7 @@ class StudentListActivity : AppCompatActivity() {
         builder.show()
     }
 
-    private fun resetSelections(edtSemester: EditText, edtClass: EditText, edtSubject: EditText) {
-        studentListRecycleViewAdapter?.resetFilteredList()
-        edtSemester.setText("")
-        selectedSemesterId = 0
-        resetSelections(edtClass, edtSubject)
-    }
 
-    private fun resetSelections(edtClass: EditText, edtSubject: EditText) {
-        edtClass.setText("")
-        selectedClassId = 0
-        resetSelections(edtSubject)
-    }
 
     private fun resetSelections(edtSubject: EditText) {
         edtSubject.setText("")

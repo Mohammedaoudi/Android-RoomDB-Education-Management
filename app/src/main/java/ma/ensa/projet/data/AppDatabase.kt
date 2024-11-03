@@ -107,7 +107,6 @@ abstract class AppDatabase : RoomDatabase() {
 
         private suspend fun insertMajors(context: Context) {
             val db = getInstance(context)
-            // Define a list of majors to insert
             val majors = listOf("2ITE", "GI", "G2E", "ISIC", "GC")
 
             majors.forEach { majorName ->

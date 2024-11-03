@@ -34,8 +34,8 @@ import java.util.Locale
 class ClassListRecycleViewAdapter(
     private val context: Context,
     originalList: ArrayList<ClassWithRelations>,
-    private val majors: List<Major>, // Accept majors as a parameter
-    private val academicYears: List<AcademicYear> // Accept academicYears as a parameter
+    private val majors: List<Major>,
+    private val academicYears: List<AcademicYear>
 ) : RecyclerView.Adapter<ClassListRecycleViewAdapter.ClassViewHolder>(), Filterable {
 
     private val originalList: ArrayList<ClassWithRelations> = originalList
@@ -47,6 +47,8 @@ class ClassListRecycleViewAdapter(
     private var selectedMajor: Major? = null
     private var selectedAcademicYear: AcademicYear? = null
     private var filteredList: ArrayList<ClassWithRelations> = originalList
+
+    private var selectedMajorId :Long? = null
 
 
     init {
@@ -76,7 +78,6 @@ class ClassListRecycleViewAdapter(
         // Fetch faculty data in a coroutine
         classWithRelations.major?.let { major ->
             CoroutineScope(Dispatchers.IO).launch {
-                // Get the faculty by ID in the background
 
                 // Update UI elements on the main thread
                 withContext(Dispatchers.Main) {
@@ -159,7 +160,6 @@ class ClassListRecycleViewAdapter(
 
     fun addClass(classWithRelations: ClassWithRelations) {
         CoroutineScope(Dispatchers.IO).launch {
-            // Insert class into the database
             AppDatabase.getInstance(context)?.classDAO()?.insert(classWithRelations.clazz)
 
             // Update the UI on the main thread after the insert
@@ -170,18 +170,6 @@ class ClassListRecycleViewAdapter(
         }
     }
 
-    private fun editClass(position: Int) {
-        val classWithRelations: ClassWithRelations = originalList[position]
-        CoroutineScope(Dispatchers.IO).launch {
-            // Update class in the database
-            AppDatabase.getInstance(context)?.classDAO()?.update(classWithRelations.clazz)
-
-            // Update the UI on the main thread after the update
-            withContext(Dispatchers.Main) {
-                notifyItemChanged(position)
-            }
-        }
-    }
 
     private fun deleteClass(position: Int) {
         val classWithRelations: ClassWithRelations = originalList[position]
@@ -196,6 +184,10 @@ class ClassListRecycleViewAdapter(
             }
         }
     }
+
+
+    // Edit Part
+
 
     @SuppressLint("InflateParams")
     private fun showEditClassDialog(classWithRelations: ClassWithRelations) {
@@ -224,6 +216,7 @@ class ClassListRecycleViewAdapter(
                 .setTitle("Select Major")
                 .setItems(majorNames) { dialog: DialogInterface?, which: Int ->
                     selectedMajor = majors[which]
+                    selectedMajorId = selectedMajor?.id!!
                     (view.findViewById<View>(R.id.edtMajor) as EditText).setText(majorNames[which])
                 }
                 .show()
@@ -258,20 +251,41 @@ class ClassListRecycleViewAdapter(
         val edtMajorName = view.findViewById<EditText>(R.id.edtMajor)
         val edtAcademicYearName = view.findViewById<EditText>(R.id.edtAcademicYear)
 
-        // Update the class, major, and academic year names with user input
-        classWithRelations.clazz.name = edtClassName.text.toString() // Set class name
-        classWithRelations.major?.name = edtMajorName.text.toString() // Set major name
-        classWithRelations.academicYear?.name = edtAcademicYearName.text.toString() // Set academic year name
+        // Update class entity
+        classWithRelations.clazz.name = edtClassName.text.toString()
+        classWithRelations.clazz.majorId = selectedMajor?.id ?: classWithRelations.clazz.majorId // Ensure majorId is updated
+        classWithRelations.clazz.academicYearId = selectedAcademicYear?.id ?: classWithRelations.clazz.academicYearId
 
-        // Assign the selected major and academic year
-        classWithRelations.major = selectedMajor // Ensure selectedMajor is not null before this line
-        classWithRelations.academicYear = selectedAcademicYear // Ensure selectedAcademicYear is not null before this line
+        // Update major entity if necessary
+        if (classWithRelations.major != null && edtMajorName.text.toString() != classWithRelations.major?.name) {
+            classWithRelations.major?.name = edtMajorName.text.toString() // Update major name if changed
+        }
 
-        // Update the class in the database asynchronously
+        // Update academic year entity if necessary
+        if (classWithRelations.academicYear != null && edtAcademicYearName.text.toString() != classWithRelations.academicYear?.name) {
+            classWithRelations.academicYear?.name = edtAcademicYearName.text.toString() // Update academic year name if changed
+        }
+
+        // Update the class and the major in the database asynchronously
         CoroutineScope(Dispatchers.IO).launch {
-            AppDatabase.getInstance(context)?.classDAO()?.update(classWithRelations.clazz)
+            val classDao = AppDatabase.getInstance(context)?.classDAO()
+            val majorDao = AppDatabase.getInstance(context)?.majorDAO()
 
-            // Update the original list on the main thread
+            // Update class entity
+            classDao?.update(classWithRelations.clazz)
+
+            // Update major entity if it has been edited
+            classWithRelations.major?.let {
+                majorDao?.update(it)
+            }
+
+            // Update the academic year entity
+            classWithRelations.academicYear?.let {
+                 val academicYearDao = AppDatabase.getInstance(context)?.academicYearDAO()
+                 academicYearDao?.update(it)
+            }
+
+            // Notify the main thread to refresh the UI
             withContext(Dispatchers.Main) {
                 editClass(originalList.indexOf(classWithRelations)) // Update the original list
                 bottomSheetDialog.dismiss() // Dismiss the dialog
@@ -279,6 +293,25 @@ class ClassListRecycleViewAdapter(
             }
         }
     }
+
+    private fun editClass(position: Int) {
+        val classWithRelations: ClassWithRelations = originalList[position]
+        CoroutineScope(Dispatchers.IO).launch {
+            // Update class in the database
+            AppDatabase.getInstance(context)?.classDAO()?.update(classWithRelations.clazz)
+
+            // Update the UI on the main thread after the update
+            withContext(Dispatchers.Main) {
+                notifyItemChanged(position)
+            }
+        }
+    }
+
+
+
+
+
+
 
     private fun validateInputs(view: View): Boolean {
         return (validateNotEmpty(view, R.id.edtClassName, "Class name cannot be empty") &&

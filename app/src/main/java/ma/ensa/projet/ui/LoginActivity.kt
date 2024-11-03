@@ -3,15 +3,11 @@ package ma.ensa.projet.ui
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Bundle
-import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
-import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -94,9 +90,7 @@ class LoginActivity : AppCompatActivity() {
         // Launch a coroutine to perform database operations off the main thread
         CoroutineScope(Dispatchers.IO).launch {
             val user = AppDatabase.getInstance(this@LoginActivity)?.userDAO()?.getByEmail(edtEmail.text.toString().trim())
-            Log.d("Login", "Retrieved user: $user") // Log retrieved user
             val users = AppDatabase.getInstance(this@LoginActivity)?.userDAO()?.getAll() ?: emptyList()
-            Log.d("Database", "Users in DB: $users")
 
             // Check if the user is valid
             if (user == null || !user.password?.let {
@@ -109,8 +103,6 @@ class LoginActivity : AppCompatActivity() {
                 }
                 return@launch
             }
-
-            // Save user ID in SharedPreferences
 
 
             // Navigate to HomeActivity
@@ -125,6 +117,9 @@ class LoginActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
 
     private fun validateInputs(): Boolean {
         return validateNotEmpty(R.id.edtEmail, "Email cannot be empty")

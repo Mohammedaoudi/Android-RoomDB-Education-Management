@@ -1,10 +1,7 @@
 package ma.ensa.projet.ui
 
-
-import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
@@ -15,8 +12,9 @@ import com.google.android.material.bottomnavigation.BottomNavigationView
 import ma.ensa.projet.R
 import ma.ensa.projet.fragments.HomeFragment
 import ma.ensa.projet.fragments.SettingFragment
-//import ma.ensa.projet.fragments.HomeFragment
 import ma.ensa.projet.utilities.Constants
+
+
 class HomeActivity : AppCompatActivity() {
 
     private lateinit var params: Map<String, String>
@@ -35,7 +33,7 @@ class HomeActivity : AppCompatActivity() {
         initBottomNavigationView()
         handleEventListener(params)
 
-        // Load the default fragment if this is the first creation
+        // Load the default fragment
         if (savedInstanceState == null) {
             bottomNavigationView.selectedItemId = R.id.navHome
             loadFragment(HomeFragment.newInstance(params))
@@ -43,7 +41,6 @@ class HomeActivity : AppCompatActivity() {
     }
 
     private fun initBottomNavigationView() {
-        val intent = intent
         val bundle = intent.extras
 
         val userId = bundle?.getLong(Constants.USER_ID, 0) ?: 0

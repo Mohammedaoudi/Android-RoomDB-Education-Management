@@ -85,7 +85,6 @@ object Utils {
     fun getRoleName(role: Constants.Role?): String {
         return when (role) {
             Constants.Role.ADMIN -> "Administrator"
-            Constants.Role.SPECIALIST -> "Specialist"
             Constants.Role.LECTURER -> "Lecturer"
             else -> "Student"
         }

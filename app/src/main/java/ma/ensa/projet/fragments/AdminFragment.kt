@@ -22,7 +22,6 @@ class AdminFragment : Fragment() {
 
     private lateinit var btnToUserManagement: CardView
     private lateinit var btnToStudentManagement: CardView
-    private lateinit var btnToScoreManagement: CardView
     private lateinit var btnToClassManagement: CardView
     private lateinit var btnToSubjectManagement: CardView
     private lateinit var btnToFeature: CardView

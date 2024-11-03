@@ -20,6 +20,7 @@ import ma.ensa.projet.data.entities.User
 import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
 
+
 class HomeFragment : Fragment() {
 
     private lateinit var user: User
@@ -39,12 +40,11 @@ class HomeFragment : Fragment() {
         arguments?.let { args ->
             val userId = args.getString(Constants.USER_ID)?.toLong() ?: 0
 
-            // Fetch the user data in a coroutine
+            // Fetch the user data in a coroutine to avoid ILLEGAL EXCEPTION
             lifecycleScope.launch {
                 user = withContext(Dispatchers.IO) {
                     AppDatabase.getInstance(requireContext())?.userDAO()?.getById(userId)!!
                 }
-                // Initialize the view with user data after fetching
                 initHomeView()
             }
         }
@@ -71,7 +71,6 @@ class HomeFragment : Fragment() {
 
             Constants.Role.LECTURER -> loadFragment(LecturerFragment.newInstance(params))
             else -> {
-                // Handle default case if needed
             }
         }
 

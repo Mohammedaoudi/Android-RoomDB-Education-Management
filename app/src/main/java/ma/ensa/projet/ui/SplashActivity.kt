@@ -33,17 +33,15 @@ class SplashActivity : AppCompatActivity() {
         startAnimations()
 
         CoroutineScope(Dispatchers.Main).launch {
-            // Initialize the database
-//            AppDatabase.initializeDatabase(this@SplashActivity) // Ensure this method is defined in your database class
-//            loadInitialData() // Load initial data after database initialization
+            // Initialize the database you can comment this after
+            AppDatabase.initializeDatabase(this@SplashActivity)
 
-            // Display the splash screen for 3 seconds
             delay(3000)
 
             // Navigate to LoginActivity
             val intent = Intent(this@SplashActivity, LoginActivity::class.java)
             startActivity(intent)
-            finish()  // Finish SplashActivity so it’s removed from the back stack
+            finish()
         }
     }
 
@@ -62,16 +60,4 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadInitialData() {
-        // Load majors, academic years, and classes from the database here
-        CoroutineScope(Dispatchers.IO).launch {
-            val db = AppDatabase.getInstance(this@SplashActivity)
-            val majors = db.majorDAO().getAll() // Assuming you have a getAll() method
-            val academicYears = db.academicYearDAO().getAll()
-            val classes = db.classDAO().getAll()
-
-            // Log the results
-            Log.d("SplashActivity", "Majors: $majors, Academic Years: $academicYears, Classes: $classes")
-        }
-    }
 }
