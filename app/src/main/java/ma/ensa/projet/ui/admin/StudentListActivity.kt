@@ -372,10 +372,22 @@ class StudentListActivity : AppCompatActivity() {
         }
 
         view.findViewById<View>(R.id.edtClass).setOnClickListener { v: View? ->
+            // Check if a major is selected
+            if (selectedMajorId <= 0) {
+                Utils.showToast(this@StudentListActivity, "Please select a major first.")
+                return@setOnClickListener // Exit the click listener if no major is selected
+            }
+
+            // Log class data before displaying the dialog
+            Log.d("ClassesData", "Class Names: ${classNames?.joinToString()}")
+            Log.d("ClassesData", "Classes: ${classes?.joinToString { "ID: ${it.id}, Name: ${it.name}" }}")
+
             AlertDialog.Builder(this)
                 .setTitle("Select Class")
                 .setItems(classNames!!.toTypedArray<CharSequence>()) { dialog: DialogInterface?, which: Int ->
                     selectedClassId = classes!![which].id
+                    Log.d("AddStudent", "Selected Class ID:" + classes!![which].name)
+
                     (view.findViewById<View>(R.id.edtClass) as EditText).setText(classNames!![which])
 
                     // Automatically set the academic year based on the selected class
@@ -429,7 +441,6 @@ class StudentListActivity : AppCompatActivity() {
     }
 
 
-
     private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
         // Filter classes based on the selected major
         val filteredClasses = classes!!.filter { it.majorId == selectedMajorId }
@@ -452,7 +463,7 @@ class StudentListActivity : AppCompatActivity() {
             try {
 
                 Log.d("AddStudent", "Selected Major ID: $selectedMajorId")
-                Log.d("AddStudent", "Selected Class ID: $selectedClassId")
+                Log.d("AddStudent", "Selected  addd Class ID: $selectedClassId")
                 Log.d("AddStudent", "Selected Academic Year ID: $selectedAcademicYearId")
 
                 // Check if the major, class, and academic year IDs exist in the database

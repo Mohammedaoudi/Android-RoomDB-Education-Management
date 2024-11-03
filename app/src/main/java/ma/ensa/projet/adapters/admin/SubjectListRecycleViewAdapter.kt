@@ -262,15 +262,16 @@ class SubjectListRecycleViewAdapter(
 
         editSubject(originalList.indexOf(subjectWithRelations))
         bottomSheetDialog.dismiss()
-        Utils.showToast(context, "Sửa thành công")
+        Utils.showToast(context, "Successfully edited")
     }
 
     private fun validateInputs(view: View): Boolean {
-        return validateNotEmpty(view, R.id.edtSubjectName, "Tên môn không được để trống") &&
-                validateNotEmpty(view, R.id.edtSubjectCredits, "Số tín chỉ không được để trống") &&
-                validateNotEmpty(view, R.id.edtClass, "Lớp không được để trống") &&
-                validateNotEmpty(view, R.id.edtMajor, "Ngành không được để trống")
+        return validateNotEmpty(view, R.id.edtSubjectName, "Subject name cannot be empty") &&
+                validateNotEmpty(view, R.id.edtSubjectCredits, "Credits cannot be empty") &&
+                validateNotEmpty(view, R.id.edtClass, "Class cannot be empty") &&
+                validateNotEmpty(view, R.id.edtMajor, "Major cannot be empty")
     }
+
 
     private fun validateNotEmpty(view: View, viewId: Int, errorMessage: String): Boolean {
         val editText: EditText = view.findViewById(viewId)

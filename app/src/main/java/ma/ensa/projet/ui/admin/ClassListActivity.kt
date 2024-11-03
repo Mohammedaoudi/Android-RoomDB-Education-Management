@@ -145,6 +145,7 @@ class ClassListActivity : AppCompatActivity() {
                 .setItems(majorNames) { _, which ->
                     selectedMajor = majors[which]
                     view.findViewById<EditText>(R.id.edtMajor).setText(majorNames[which])
+                    Log.d("ClassListActivity", "Major selected: ${selectedMajor?.name}")
                 }
                 .show()
         }
@@ -160,6 +161,7 @@ class ClassListActivity : AppCompatActivity() {
                 .setItems(academicYearNames) { _, which ->
                     selectedAcademicYear = academicYears[which]
                     view.findViewById<EditText>(R.id.edtAcademicYear).setText(academicYearNames[which])
+                    Log.d("ClassListActivity", "Academic Year selected: ${selectedAcademicYear?.name}")
                 }
                 .show()
         }
@@ -182,10 +184,14 @@ class ClassListActivity : AppCompatActivity() {
         Log.d("ClassListActivity", "Performing Add Class with Major: $selectedMajor, " +
                 "Academic Year: $selectedAcademicYear")
 
-        if (!validateInputs(view)) return
+        if (!validateInputs(view)) {
+            Log.d("ClassListActivity", "Validation failed for inputs.")
+            return
+        }
 
         if (selectedMajor == null || selectedAcademicYear == null) {
             Utils.showToast(this, "Please select major and academic year")
+            Log.d("ClassListActivity", "Major or Academic Year not selected.")
             return
         }
 
@@ -196,15 +202,20 @@ class ClassListActivity : AppCompatActivity() {
                 academicYearId = selectedAcademicYear?.id
             )
 
+            Log.d("ClassListActivity", "Class created: $clazz")
+
             val classWithRelations = ClassWithRelations(
                 clazz = clazz,
                 major = selectedMajor!!,
                 academicYear = selectedAcademicYear!!
             )
 
+            Log.d("ClassListActivity", "Class with relations created: $classWithRelations")
+
             classListRecycleViewAdapter.addClass(classWithRelations)
             bottomSheetDialog.dismiss()
             Utils.showToast(this, "Added successfully")
+            Log.d("ClassListActivity", "Class added successfully to the adapter.")
 
         } catch (e: Exception) {
             Log.e("AddClass", "Error adding class", e)
@@ -212,7 +223,7 @@ class ClassListActivity : AppCompatActivity() {
     }
 
 
-private fun validateInputs(view: View): Boolean {
+    private fun validateInputs(view: View): Boolean {
     return validateNotEmpty(view, R.id.edtClassName, "Class name cannot be empty") &&
             validateNotEmpty(view, R.id.edtMajor, "Major cannot be empty") &&
             validateNotEmpty(view, R.id.edtAcademicYear, "Academic year cannot be empty")

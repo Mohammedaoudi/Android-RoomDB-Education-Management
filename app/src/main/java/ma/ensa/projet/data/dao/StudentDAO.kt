@@ -38,13 +38,9 @@ interface StudentDAO {
     """)
     fun getBySemester(semesterId: Long): List<StudentWithRelations>
 
-    @Query("""
-        SELECT s.* FROM students s 
-        JOIN users u ON s.user_id = u.id 
-        WHERE s.class_id = :classId 
-        ORDER BY u.full_name
-    """)
-    fun getByClass(classId: Long): List<StudentWithRelations>
+
+    @Query("SELECT * FROM students WHERE class_id = :classId")
+    suspend fun getByClass(classId: Long): List<StudentWithRelations>
 
 
     @Query("SELECT * FROM students WHERE class_id = :classId ORDER BY id DESC")

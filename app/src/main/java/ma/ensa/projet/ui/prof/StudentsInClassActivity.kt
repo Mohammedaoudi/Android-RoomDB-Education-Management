@@ -1,6 +1,7 @@
 package ma.ensa.projet.ui.prof
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.ImageView
 import androidx.appcompat.app.AppCompatActivity
@@ -69,7 +70,11 @@ class StudentsInClassActivity : AppCompatActivity() {
         val studentsWithRelations = withContext(Dispatchers.IO) {
             studentDao.getByClass(classId) // Ensure this method is a suspend function
         }
+
+        Log.d("StudentsInClassActivity", "Fetched students Size: ${studentsWithRelations.size}")
+
         val studentNames = studentsWithRelations.map { it.user.fullName } // Assuming 'student' is a property and 'name' is a field of Student
+        Log.d("StudentsInClassActivity", "Selected class ID: $selectedClassId")
 
         if (studentNames.isNotEmpty()) {
             studentAdapter.submitList(studentNames) // Now pass the list of names
