@@ -13,5 +13,5 @@ data class SubjectWithRelations(
     var clazz: Classe,
     @Relation(parentColumn = "major_id", entityColumn = "id")
     var major: Major,
-    val semesterId: Long?
+    var semesterId: Long?
 )

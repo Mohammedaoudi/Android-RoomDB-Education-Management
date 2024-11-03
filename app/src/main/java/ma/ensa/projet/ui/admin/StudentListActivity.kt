@@ -144,18 +144,22 @@ class StudentListActivity : AppCompatActivity() {
             val students: List<StudentWithRelations?>? = withContext(Dispatchers.IO) {
                 when {
                     selectedMajorId > 0 && selectedClassId > 0 -> {
+                        Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId and Class ID: $selectedClassId")
                         AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
                             ?.getByMajorClass(selectedMajorId, selectedClassId)
                     }
                     selectedMajorId > 0 -> {
+                        Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId")
                         AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
                             ?.getByMajor(selectedMajorId)
                     }
                     selectedClassId > 0 -> {
+                        Log.d("UpdateStudentList", "Fetching students by Class ID: $selectedClassId")
                         AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
                             ?.getByClass(selectedClassId)
                     }
                     else -> {
+                        Log.d("UpdateStudentList", "Fetching all students")
                         AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()?.getAllWithRelations()
                     }
                 }
@@ -385,8 +389,10 @@ class StudentListActivity : AppCompatActivity() {
             AlertDialog.Builder(this)
                 .setTitle("Select Class")
                 .setItems(classNames!!.toTypedArray<CharSequence>()) { dialog: DialogInterface?, which: Int ->
-                    selectedClassId = classes!![which].id
-                    Log.d("AddStudent", "Selected Class ID:" + classes!![which].name)
+
+                    // Get the ID from the name
+                    selectedClassId = classes!!.first { it.name == classNames!![which] }.id
+                    Log.d("AddStudent", "Selected Class ID: $selectedClassId, Name: ${classNames!![which]}")
 
                     (view.findViewById<View>(R.id.edtClass) as EditText).setText(classNames!![which])
 
@@ -396,8 +402,7 @@ class StudentListActivity : AppCompatActivity() {
                             ?.classDAO()?.getById(selectedClassId)
 
                         if (selectedClass != null) {
-                            selectedAcademicYearId =
-                                selectedClass.academicYearId!! // Set the academic year
+                            selectedAcademicYearId = selectedClass.academicYearId!! // Set the academic year
 
                             // Fetch and set the academic year name on the main thread
                             val academicYearName = AppDatabase.getInstance(this@StudentListActivity)
@@ -415,10 +420,6 @@ class StudentListActivity : AppCompatActivity() {
                 }
                 .show()
         }
-
-
-
-
         view.findViewById<View>(R.id.btnAddStudent).setOnClickListener { v: View? ->
             AlertDialog.Builder(this)
                 .setTitle("Notification")
@@ -440,21 +441,16 @@ class StudentListActivity : AppCompatActivity() {
         bottomSheetDialog!!.show()
     }
 
-
     private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
         // Filter classes based on the selected major
         val filteredClasses = classes!!.filter { it.majorId == selectedMajorId }
-        classNames = ArrayList<String>(filteredClasses.size + 1).apply {
-            for (clazz in filteredClasses) {
-                clazz.name?.let { add(it) }
-            }
-        }
+
+        // Create a new ArrayList from the filtered class names
+        classNames = ArrayList(filteredClasses.map { it.name ?: "Unknown" }) // Use map to extract names
 
         // Update the class EditText view
         (view.findViewById<View>(R.id.edtClass) as EditText).setText("") // Clear selection
     }
-
-
 
     private fun performAddStudent(view: View) {
         if (!validateInputs(view)) return
@@ -469,6 +465,10 @@ class StudentListActivity : AppCompatActivity() {
                 // Check if the major, class, and academic year IDs exist in the database
                 val major = AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()?.getById(selectedMajorId)
                 val clazz = AppDatabase.getInstance(this@StudentListActivity)?.classDAO()?.getById(selectedClassId)
+                if (clazz != null) {
+                    Log.d("AddStudent", "Selected  name Class : ${clazz.name}")
+                }
+
                 val academicYear = AppDatabase.getInstance(this@StudentListActivity)?.academicYearDAO()?.getById(selectedAcademicYearId)
 
                 // If any related entity is missing, stop and show an error
@@ -647,12 +647,35 @@ class StudentListActivity : AppCompatActivity() {
         val edtClass = view.findViewById<EditText>(R.id.edtClass)
 
         // Load all majors immediately
-        loadAllMajors(edtMajor)
+
+        // Initially disable the class selection
+        edtClass.isEnabled = false
 
         // Major selection
         edtMajor.setOnClickListener {
-            loadAllMajors(edtMajor) // Load all majors without any filter
+            lifecycleScope.launch {
+                try {
+                    val majorsList = withContext(Dispatchers.IO) {
+                        AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()
+                            ?.getAll() // Fetching all majors
+                    }
+                    majors = majorsList?.let { ArrayList(it) } ?: ArrayList()
+                    majorNames = majors!!.mapNotNull { it.name } as ArrayList<String>
+
+                    // Show selection dialog for majors
+                    showSelectionDialog("Select Major", majorNames!!) { dialog, which ->
+                        selectedMajorId = majors!![which].id
+                        edtMajor.setText(majorNames!![which])
+                        edtClass.isEnabled = true // Enable class selection once a major is selected
+                        // Optionally, load classes for the selected major here
+                        loadClasses(selectedMajorId) // Load classes based on the selected major
+                    }
+                } catch (e: Exception) {
+                    Log.e("FilterDialog", "Error fetching majors: ${e.message}")
+                }
+            }
         }
+
 
         // Class selection
         edtClass.setOnClickListener {
@@ -669,38 +692,30 @@ class StudentListActivity : AppCompatActivity() {
         }
 
         // Confirm button
-        view.findViewById<View>(R.id.btnConfirm).setOnClickListener { updateStudentList() }
-    }
-
-    // Load all majors without filtering by academic year
-    private fun loadAllMajors(edtMajor: EditText) {
-        lifecycleScope.launch {
-            try {
-                val majorsList = withContext(Dispatchers.IO) {
-                    AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()?.getAll() // Assuming this method exists
-                }
-                majors = majorsList?.let { ArrayList(it) }
-                majorNames = (majors?.mapNotNull { it.name } ?: emptyList()) as ArrayList<String>?
-                showSelectionDialog("Select Major", majorNames!!) { dialog, which ->
-                    selectedMajorId = majors!![which].id
-                    edtMajor.setText(majorNames!![which])
-                }
-            } catch (e: Exception) {
-                Log.e("FilterDialog", "Error fetching majors: ${e.message}")
-            }
+        view.findViewById<View>(R.id.btnConfirm).setOnClickListener {
+            updateStudentList()
+            edtMajor.setText("") // Clear major selection
+            edtClass.setText("")
         }
     }
 
+    // Call this function when a major is selected to enable class selection
 
-    // Load classes based on selected major
-    private fun loadClasses(majorId: Long, edtClass: EditText) {
+    // Load all majors without filtering by academic year
+
+
+
+    private fun loadClasses(majorId: Long) {
         lifecycleScope.launch {
             try {
                 val classesList = withContext(Dispatchers.IO) {
                     AppDatabase.getInstance(this@StudentListActivity)?.classDAO()?.getByMajor(majorId)
+
                 }
                 classes = classesList?.map { it.clazz }?.let { ArrayList(it) }
                 classNames = (classes?.mapNotNull { it.name } ?: emptyList()) as ArrayList<String>?
+                Log.d("FilterDialog", "fetching classes: ${classNames} + id :  ${majorId}")
+
             } catch (e: Exception) {
                 Log.e("FilterDialog", "Error fetching classes: ${e.message}")
             }

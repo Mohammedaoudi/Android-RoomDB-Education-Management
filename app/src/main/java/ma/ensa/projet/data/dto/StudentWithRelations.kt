@@ -14,11 +14,11 @@ data class StudentWithRelations(
     @Embedded
     var student: Student,
     @Relation(parentColumn = "major_id", entityColumn = "id")
-    val major: Major,
+    var major: Major,
     @Relation(parentColumn = "academic_year_id", entityColumn = "id")
     val academicYear: AcademicYear,
     @Relation(parentColumn = "class_id", entityColumn = "id")
-    val clazz: Classe?,
+    var clazz: Classe?,
     @Relation(parentColumn = "user_id", entityColumn = "id")
     var user: User
 )

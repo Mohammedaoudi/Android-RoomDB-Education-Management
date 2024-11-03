@@ -103,7 +103,6 @@ class StudentListRecycleViewAdapter(
         }
     }
 
-    fun getFilteredList(): ArrayList<StudentWithRelations> = filteredList
 
     @SuppressLint("NotifyDataSetChanged")
     fun setFilteredList(list: ArrayList<StudentWithRelations>) {
@@ -235,36 +234,8 @@ class StudentListRecycleViewAdapter(
     }
 
 
-    fun updateStudentList(studentWithRelations: StudentWithRelations) {
-        Log.d("UpdateStudentList", "Before Adding: Original Size: ${originalList.size}")
-
-        // Add to original list
-
-        // Optionally add to filtered list if applicable
 
 
-        Log.d("UpdateStudentList", "After Adding: Original Size: ${originalList.size}")
-        // Notify the adapter that the dataset has changed
-        originalList.add(0, studentWithRelations)
-        notifyItemInserted(0)    }
-
-
-    private fun editStudent(position: Int) {
-        // Use a coroutine scope to perform the database operations off the main thread
-        CoroutineScope(Dispatchers.IO).launch {
-            val studentWithRelations: StudentWithRelations = filteredList[position]
-
-            // Update student and user properties
-            AppDatabase.getInstance(context)?.studentDAO()?.update(studentWithRelations.student)
-            AppDatabase.getInstance(context)?.userDAO()?.update(studentWithRelations.user)
-
-            // After updating the database, return to the main thread to update the UI
-            withContext(Dispatchers.Main) {
-                filter.filter(currentFilterText)
-                notifyItemChanged(position)
-            }
-        }
-    }
 
 
 
@@ -371,22 +342,6 @@ class StudentListRecycleViewAdapter(
                     .show()
             }
 
-            // Class selection
-            edtClass.setOnClickListener {
-                AlertDialog.Builder(context)
-                    .setItems(classNames.toTypedArray()) { _, which ->
-                        selectedClass = classes[which]
-                        edtClass.setText(selectedClass?.name)
-                        selectedAcademicYear = academicYears.find { it.id == selectedClass?.academicYearId }
-                        edtAcademicYear.setText(selectedAcademicYear?.name)
-
-                    }
-                    .show()
-            }
-
-            // Academic year selection
-
-            // Image picker
             iconCamera.setOnClickListener {
                 (context as? StudentListActivity)?.let { activity ->
                     ImagePicker.with(activity)
@@ -397,7 +352,24 @@ class StudentListRecycleViewAdapter(
                 }
             }
 
-            // Edit button
+
+            edtClass.setOnClickListener {
+                AlertDialog.Builder(context)
+                    .setItems(classNames.toTypedArray()) { _, which ->
+                        // Set selectedClass to the Classe object at the selected index
+                        selectedClass = filteredClasses[which]
+                        edtClass.setText(selectedClass?.name)
+
+                        // Set the academic year based on the selected class's academicYearId
+                        selectedAcademicYear =
+                            academicYears.find { it.id == selectedClass?.academicYearId }
+                        edtAcademicYear.setText(selectedAcademicYear?.name)
+
+                        selectedClass?.name?.let { Log.d("Selected Class Name", it) }
+                    }
+                    .show()
+            }
+
             btnEdit.setOnClickListener {
                 if (edtFullName.text.isEmpty() || edtEmail.text.isEmpty()) {
                     Utils.showToast(context, "Please enter full name and email!")
@@ -423,12 +395,23 @@ class StudentListRecycleViewAdapter(
                     avatar = (context as? StudentListActivity)?.tempImageBytes ?: avatar
                 }
 
-                // Update the major, class, and academic year
+
                 studentWithRelations.student.majorId = selectedMajor?.id
                 studentWithRelations.student.classId = selectedClass?.id
                 studentWithRelations.student.academicYearId = selectedAcademicYear?.id
 
-                editStudent(filteredList.indexOf(studentWithRelations))
+                studentWithRelations.clazz = selectedClass
+                studentWithRelations.major = selectedMajor as Major
+
+                Log.d("hnnnanana",selectedMajor?.name + " fffff"+ selectedClass?.name )
+                // Find the index and update directly in filteredList
+                val index = filteredList.indexOfFirst { it.student.id == studentWithRelations.student.id }
+                if (index != -1) {
+                    filteredList[index] = studentWithRelations  // Update the specific student object
+                    editStudent(index)
+                } else {
+                    Utils.showToast(context, "Student not found in the list!")
+                }
 
                 // Reset temporary variables
                 (context as? StudentListActivity)?.apply {
@@ -458,20 +441,48 @@ class StudentListRecycleViewAdapter(
         }
     }
 
+    private fun editStudent(position: Int) {
+        // Use a coroutine scope to perform the database operations off the main thread
+        CoroutineScope(Dispatchers.IO).launch {
+            val studentWithRelations: StudentWithRelations = filteredList[position]
 
-    private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
-        // Filter classes based on the selected major
-        val filteredClasses = classes!!.filter { it.majorId == selectedMajorId }
-        classNames = ArrayList<String>(filteredClasses.size + 1).apply {
-            for (clazz in filteredClasses) {
-                clazz.name?.let { add(it) }
+            // Update student and user properties
+            AppDatabase.getInstance(context)?.studentDAO()?.update(studentWithRelations.student)
+            AppDatabase.getInstance(context)?.userDAO()?.update(studentWithRelations.user)
+
+            // After updating the database, return to the main thread to update the UI
+            withContext(Dispatchers.Main) {
+                filter.filter(currentFilterText)
+                notifyItemChanged(position)
             }
         }
-
-        // Update the class EditText view
-        (view.findViewById<View>(R.id.edtClass) as EditText).setText("") // Clear selection
     }
 
+
+    private lateinit var filteredClasses: List<Classe>
+
+    private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
+        CoroutineScope(Dispatchers.Main).launch {
+            // Fetch classes asynchronously based on major
+            val allClasses = withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(context)?.classDAO()?.getAll() ?: emptyList()
+            }
+
+            // Filter classes by the selected major ID and store them in filteredClasses
+            filteredClasses = allClasses.filter { it.majorId == selectedMajorId }
+
+            // Update classNames with filtered classes
+            classNames = ArrayList<String>(filteredClasses.size).apply {
+                for (clazz in filteredClasses) {
+                    clazz.name?.let { add(it) }
+                }
+            }
+            Log.d("hnnnnnn", classNames.toString())
+
+            // Clear the class EditText
+            view.findViewById<EditText>(R.id.edtClass).setText("")
+        }
+    }
     class StudentViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val txtStudentName: TextView = itemView.findViewById(R.id.txtStudentName)
 

@@ -14,6 +14,8 @@ import android.widget.Filter
 import android.widget.Filterable
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -27,6 +29,7 @@ import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.dto.SubjectWithRelations
 import ma.ensa.projet.data.entities.Classe
 import ma.ensa.projet.data.entities.Major
+import ma.ensa.projet.data.entities.Semester
 import ma.ensa.projet.ui.admin.StudentListActivity
 import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
@@ -40,36 +43,50 @@ class SubjectListRecycleViewAdapter(
 ) : RecyclerView.Adapter<SubjectListRecycleViewAdapter.SubjectViewHolder>(), Filterable {
 
     private val bottomSheetDialog = BottomSheetDialog(context)
-    private lateinit var classes: List<Classe>
-    private lateinit var classNames: Array<String>
-    private var majors: List<Major>? = null
-    private var majorNames: Array<String>? = null
+    private var selectedMajor: Major? = null // Currently selected major
+    private var majors = ArrayList<Major>() // List of all majors
+    private lateinit var majorNames: Array<String> // Array of major names for selection
+
+    private var selectedClass: Classe? = null // Currently selected class
+    private var classes = ArrayList<Classe>() // List of all classes
+    private lateinit var classNames: ArrayList<String> // Array of class names for selection
+
+    private var selectedSemesterId: Long? = null // Currently selected semester
+    private var semesters = ArrayList<Semester>() // List of all semesters
+    private lateinit var semesterNames: Array<String> // Array of semester names for selection
+
 
     private var filteredList: ArrayList<SubjectWithRelations> = originalList
     private var currentFilterText = ""
-    private var selectedClass: Classe? = null
-    private var selectedMajor: Major? = null
+
 
 
     init {
-        fetchClassesAndMajors()
+        // Initialize data (consider this if you want it done during adapter creation)
+        fetchInitialData()
     }
 
-    private fun fetchClassesAndMajors() {
+    private fun fetchInitialData() {
         CoroutineScope(Dispatchers.IO).launch {
-            classes = AppDatabase.getInstance(context)?.classDAO()?.getAll() ?: emptyList()
-            classNames = Array(classes.size) { classes[it].name.toString() }
+            val db = AppDatabase.getInstance(context)
 
-            majors = AppDatabase.getInstance(context)?.majorDAO()?.getAll()
-            majorNames = majors?.let { Array(it.size) { majors!![it].name.toString() } }
+            // Fetch all data
+            majors = ArrayList(db?.majorDAO()?.getAll() ?: listOf())
+            classes = ArrayList(db?.classDAO()?.getAll() ?: listOf())
+            semesters = ArrayList(db?.semesterDAO()?.getAll() ?: listOf())
 
-            // Notify the adapter on the main thread
+            // Initialize the name arrays/lists
+            majorNames = majors.mapNotNull { it.name }.toTypedArray()
+            classNames = ArrayList(classes.mapNotNull { it.name })
+            semesterNames = semesters.mapNotNull { it.name }.toTypedArray()
+
+            Log.d("tesstst", semesters.toString())
+
             withContext(Dispatchers.Main) {
-                notifyDataSetChanged() // You might want to implement a better way to handle this
+                notifyDataSetChanged()
             }
         }
     }
-
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SubjectViewHolder {
         val view = LayoutInflater.from(context).inflate(R.layout.admin_layout_recycle_view_list_subject, parent, false)
@@ -152,48 +169,6 @@ class SubjectListRecycleViewAdapter(
     }
 
 
-    fun addSubject(subjectWithRelations: SubjectWithRelations) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val subjectId = AppDatabase.getInstance(context)?.subjectDAO()?.insert(subjectWithRelations.subject)
-                Log.d("InsertSubject", "Inserted subject ID: $subjectId")
-            } catch (e: Exception) {
-                Log.e("InsertSubject", "Error inserting subject: ${e.message}", e)
-            }
-
-            withContext(Dispatchers.Main) {
-                originalList.add(0, subjectWithRelations)
-                notifyItemInserted(0)
-            }
-        }
-    }
-    private fun editSubject(position: Int) {
-        val subjectWithRelations = filteredList[position]
-        CoroutineScope(Dispatchers.IO).launch {
-            AppDatabase.getInstance(context)?.subjectDAO()?.update(subjectWithRelations.subject)
-
-            // Switch back to the main thread to update the UI
-            withContext(Dispatchers.Main) {
-                getFilter().filter(currentFilterText)
-                notifyItemChanged(position)
-            }
-        }
-    }
-
-    private fun deleteSubject(position: Int) {
-        val subjectWithRelations = filteredList[position]
-        CoroutineScope(Dispatchers.IO).launch {
-            AppDatabase.getInstance(context)?.subjectDAO()?.delete(subjectWithRelations.subject)
-
-            // Switch back to the main thread to update the UI
-            withContext(Dispatchers.Main) {
-                originalList.remove(subjectWithRelations)
-                filteredList.remove(subjectWithRelations)
-                getFilter().filter(currentFilterText)
-                notifyItemRemoved(position)
-            }
-        }
-    }
     private fun showEditSubjectDialog(subjectWithRelations: SubjectWithRelations) {
         val view = LayoutInflater.from(context).inflate(R.layout.admin_bottom_sheet_edit_subject, null)
         bottomSheetDialog.setContentView(view)
@@ -207,33 +182,84 @@ class SubjectListRecycleViewAdapter(
         val edtSubjectCredits: EditText = view.findViewById(R.id.edtSubjectCredits)
         val edtClassName: EditText = view.findViewById(R.id.edtClass)
         val edtMajorName: EditText = view.findViewById(R.id.edtMajor)
-        val btnEdit: Button = view.findViewById(R.id.btnEditSubject)
+        val edtSemesterName: EditText = view.findViewById(R.id.edtSemester)
 
+        // Populate fields with existing subject data
         edtSubjectName.setText(subjectWithRelations.subject.name)
         edtSubjectCredits.setText(subjectWithRelations.subject.credits.toString())
         edtClassName.setText(subjectWithRelations.clazz.name)
         edtMajorName.setText(subjectWithRelations.major.name)
 
-        edtClassName.setOnClickListener {
-            AlertDialog.Builder(context)
-                .setTitle("Select Class")
-                .setItems(classNames) { _, which ->
-                    selectedClass = classes[which]
-                    edtClassName.setText(classNames[which])
-                }
-                .show()
-        }
+        // Initialize selectedSemesterId
+        selectedSemesterId = subjectWithRelations.semesterId
+        edtSemesterName.setText(semesters.find { it.id == selectedSemesterId }?.name)
 
+        // Initially disable class and semester selection until a major is selected
+        edtClassName.isEnabled = false
+
+        // Major selection
         edtMajorName.setOnClickListener {
-            AlertDialog.Builder(context)
-                .setTitle("Select Major")
-                .setItems(majorNames) { _, which ->
-                    selectedMajor = majors?.get(which)
-                    edtMajorName.setText(majorNames?.get(which))
-                }
-                .show()
+            if (majorNames.isNotEmpty()) {
+                AlertDialog.Builder(context)
+                    .setTitle("Select Major")
+                    .setItems(majorNames) { _, which ->
+                        selectedMajor = majors[which]
+                        edtMajorName.setText(selectedMajor?.name)
+
+                        // Update classes based on the selected major
+                        updateClassesForMajor(selectedMajor!!.id, view)
+
+                        // Clear previous selections
+                        edtClassName.setText("") // Clear class selection
+                        edtSemesterName.setText("") // Clear semester selection
+                        edtClassName.isEnabled = true // Enable class selection now that major is selected
+                    }
+                    .show()
+            } else {
+                Utils.showToast(context, "No majors available")
+            }
         }
 
+        // Class selection
+// Class selection
+        edtClassName.setOnClickListener {
+            if (selectedMajor == null) {
+                Utils.showToast(context, "Please select a major first")
+            } else if (classNames.isNotEmpty()) {
+                AlertDialog.Builder(context)
+                    .setTitle("Select Class")
+                    .setItems(classNames.toTypedArray()) { _, which ->
+                        selectedClass = classes.firstOrNull { it.name == classNames[which] }
+                        Log.d("selectesggg", selectedClass.toString())
+                        edtClassName.setText(selectedClass?.name)
+                        // Clear semester selection
+                        updateSemestersForMajor(selectedClass!!.majorId, view)
+                    }
+                    .show()
+            } else {
+                Utils.showToast(context, "No classes available for selected major")
+            }
+        }
+
+        // Semester selection
+        edtSemesterName.setOnClickListener {
+            if (selectedClass == null) {
+                Utils.showToast(context, "Please select a class first")
+            } else if (semesters.isNotEmpty()) {
+                AlertDialog.Builder(context)
+                    .setTitle("Select Semester")
+                    .setItems(semesterNames) { _, which ->
+                        selectedSemesterId = semesters[which].id
+                        edtSemesterName.setText(semesterNames[which])
+                    }
+                    .show()
+            } else {
+                Utils.showToast(context, "No semesters available for the selected class")
+            }
+        }
+
+        // Edit button action
+        val btnEdit: Button = view.findViewById(R.id.btnEditSubject)
         btnEdit.setOnClickListener {
             AlertDialog.Builder(context)
                 .setTitle("Notification")
@@ -250,20 +276,131 @@ class SubjectListRecycleViewAdapter(
         val edtSubjectName: EditText = view.findViewById(R.id.edtSubjectName)
         val edtSubjectCredits: EditText = view.findViewById(R.id.edtSubjectCredits)
 
+        // Update the subjectWithRelations object with new data
         subjectWithRelations.subject.apply {
             name = edtSubjectName.text.toString()
-            credits = edtSubjectCredits.text.toString().toInt()
+            credits = edtSubjectCredits.text.toString().toIntOrNull() ?: 0
+
+            // Update class and major IDs, retaining existing values if not changed
             classId = selectedClass?.id!!
             majorId = selectedMajor?.id!!
         }
 
+
         subjectWithRelations.clazz = selectedClass!!
         subjectWithRelations.major = selectedMajor!!
+        val position = filteredList.indexOfFirst { it.subject.id == subjectWithRelations.subject.id }
+        if (position != -1) {
+            editSubject(subjectWithRelations, position) // Update the subject in the database
+        } else {
+            Utils.showToast(context, "Subject not found in the list")
+        }
 
-        editSubject(originalList.indexOf(subjectWithRelations))
         bottomSheetDialog.dismiss()
         Utils.showToast(context, "Successfully edited")
     }
+
+    private fun editSubject(subjectWithRelations: SubjectWithRelations, position: Int) {
+        CoroutineScope(Dispatchers.IO).launch {
+            // Update the subject in the database
+            AppDatabase.getInstance(context)?.subjectDAO()?.update(subjectWithRelations.subject)
+
+            // Switch back to the main thread to update the UI
+            withContext(Dispatchers.Main) {
+                // Update the filtered list with edited subject
+                if (position in filteredList.indices) {
+                    // Create a new SubjectWithRelations object if necessary
+                    val updatedSubjectWithRelations = SubjectWithRelations(
+                        subject = subjectWithRelations.subject,
+                        clazz = filteredList[position].clazz, // Use existing class
+                        major = filteredList[position].major, // Use existing major
+                        semesterId = filteredList[position].semesterId // Use existing semester
+                    )
+                    filteredList[position] = updatedSubjectWithRelations // Replace the old object
+                    notifyItemChanged(position) // Notify adapter of the change
+                } else {
+                    Utils.showToast(context, "Position out of bounds for filtered list")
+                }
+            }
+        }
+    }
+
+
+    private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
+        CoroutineScope(Dispatchers.Main).launch {            // Fetch classes asynchronously based on major
+            val allClasses = withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(context)?.classDAO()?.getAll() ?: emptyList()
+            }
+
+            // Filter classes by the selected major ID
+            val filteredClasses = allClasses.filter { it.majorId == selectedMajorId }
+
+            // Update classNames with filtered classes
+            classNames = ArrayList<String>(filteredClasses.size).apply {
+                for (clazz in filteredClasses) {
+                    clazz.name?.let { add(it) }
+                }
+            }
+
+            // Clear the class EditText
+            view.findViewById<EditText>(R.id.edtClass).setText("")
+        }
+    }
+
+    private fun updateSemestersForMajor(majorId: Long?, view: View) {
+        if (majorId != null) {
+            CoroutineScope(Dispatchers.Main).launch {
+                val filteredSemesters = withContext(Dispatchers.IO) {
+                    val db = AppDatabase.getInstance(context)
+                    db?.semesterDAO()?.getSemestersByMajorId(majorId) ?: emptyList()
+                }
+
+                // Update semesters on the main thread
+                semesters.clear()
+                semesters.addAll(filteredSemesters)
+                semesterNames = Array(semesters.size) { semesters[it].name.toString() }
+                Log.d("hnaaaaaaa", semesterNames.toString())
+            }
+        } else {
+            semesters.clear()
+            semesterNames = emptyArray()
+        }
+    }
+
+
+
+    fun addSubject(subjectWithRelations: SubjectWithRelations) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val subjectId = AppDatabase.getInstance(context)?.subjectDAO()?.insert(subjectWithRelations.subject)
+                Log.d("InsertSubject", "Inserted subject ID: $subjectId")
+            } catch (e: Exception) {
+                Log.e("InsertSubject", "Error inserting subject: ${e.message}", e)
+            }
+
+            withContext(Dispatchers.Main) {
+                originalList.add(0, subjectWithRelations)
+                notifyItemInserted(0)
+            }
+        }
+    }
+
+
+    private fun deleteSubject(position: Int) {
+        val subjectWithRelations = filteredList[position]
+        CoroutineScope(Dispatchers.IO).launch {
+            AppDatabase.getInstance(context)?.subjectDAO()?.delete(subjectWithRelations.subject)
+
+            // Switch back to the main thread to update the UI
+            withContext(Dispatchers.Main) {
+                originalList.remove(subjectWithRelations)
+                filteredList.remove(subjectWithRelations)
+                getFilter().filter(currentFilterText)
+                notifyItemRemoved(position)
+            }
+        }
+    }
+
 
     private fun validateInputs(view: View): Boolean {
         return validateNotEmpty(view, R.id.edtSubjectName, "Subject name cannot be empty") &&

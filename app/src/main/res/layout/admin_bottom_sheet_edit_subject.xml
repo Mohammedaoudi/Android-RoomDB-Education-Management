@@ -83,6 +83,46 @@
 
     </LinearLayout>
 
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="10dp"
+            android:fontFamily="@font/opensans_bold"
+            android:text="Major"
+            android:textColor="@color/white"
+            android:textSize="18sp" />
+
+        <EditText
+            android:id="@+id/edtMajor"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:autofillHints="name"
+            android:background="@drawable/custom_input"
+            android:clickable="false"
+            android:drawablePadding="12dp"
+            android:ems="10"
+            android:focusable="false"
+            android:focusableInTouchMode="false"
+            android:fontFamily="@font/opensans_bold"
+            android:hint="--- Select Major ---"
+            android:inputType="none"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/grey"
+            android:textSize="16sp"
+            tools:ignore="LabelFor" />
+
+    </LinearLayout>
+
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -133,12 +173,12 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="10dp"
             android:fontFamily="@font/opensans_bold"
-            android:text="Major"
+            android:text="Semester"
             android:textColor="@color/white"
             android:textSize="18sp" />
 
         <EditText
-            android:id="@+id/edtMajor"
+            android:id="@+id/edtSemester"
             android:layout_width="match_parent"
             android:layout_height="56dp"
             android:autofillHints="name"
@@ -149,7 +189,7 @@
             android:focusable="false"
             android:focusableInTouchMode="false"
             android:fontFamily="@font/opensans_bold"
-            android:hint="--- Select Major ---"
+            android:hint="--- Select Semester ---"
             android:inputType="none"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
@@ -158,6 +198,7 @@
             tools:ignore="LabelFor" />
 
     </LinearLayout>
+
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnEditSubject"
