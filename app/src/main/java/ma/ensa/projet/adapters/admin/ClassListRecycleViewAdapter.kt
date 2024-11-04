@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.View.OnLongClickListener
@@ -26,6 +27,7 @@ import ma.ensa.projet.adapters.admin.listener.ItemClickListener
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.dto.ClassWithRelations
 import ma.ensa.projet.data.entities.AcademicYear
+import ma.ensa.projet.data.entities.Classe
 import ma.ensa.projet.data.entities.Major
 import ma.ensa.projet.ui.admin.StudentListActivity
 import ma.ensa.projet.utilities.Constants
@@ -48,7 +50,6 @@ class ClassListRecycleViewAdapter(
     private var selectedAcademicYear: AcademicYear? = null
     private var filteredList: ArrayList<ClassWithRelations> = originalList
 
-    private var selectedMajorId :Long? = null
 
 
     init {
@@ -76,16 +77,19 @@ class ClassListRecycleViewAdapter(
         val classWithRelations: ClassWithRelations = filteredList[position]
 
         // Fetch faculty data in a coroutine
-        classWithRelations.major?.let { major ->
+
             CoroutineScope(Dispatchers.IO).launch {
 
                 // Update UI elements on the main thread
                 withContext(Dispatchers.Main) {
                     holder.txtClassName.text = classWithRelations.clazz.name
+
                     holder.txtMajorName.text = classWithRelations.major?.name
+
+                    Log.d("EditClassh", "$classWithRelations")
                     holder.txtAcademicYearName.text = classWithRelations.academicYear?.name
                 }
-            }
+
         }
 
         holder.setItemClickListener(ItemClickListener { view, position1, isLongClick ->
@@ -158,14 +162,36 @@ class ClassListRecycleViewAdapter(
         }
     }
 
-    fun addClass(classWithRelations: ClassWithRelations) {
+    fun addClass(name: String, selectedMajor: Major, selectedAcademicYear: AcademicYear) {
         CoroutineScope(Dispatchers.IO).launch {
-            AppDatabase.getInstance(context)?.classDAO()?.insert(classWithRelations.clazz)
+            // Create a new Classe instance without an ID (Room will auto-generate it)
+            val clazz = Classe(
+                name = name,
+                majorId = selectedMajor.id,
+                academicYearId = selectedAcademicYear.id
+            )
 
-            // Update the UI on the main thread after the insert
+            // Insert the class and capture the generated ID
+            val newId = AppDatabase.getInstance(context)?.classDAO()?.insert(clazz)
+
+            // Create a ClassWithRelations object with the newly inserted class
+            val classWithRelations = newId?.let { id ->
+                ClassWithRelations(
+                    clazz = clazz.copy(id = id),
+                    major = selectedMajor,
+                    academicYear = selectedAcademicYear
+                )
+            }
+
+            // Update the UI on the main thread
             withContext(Dispatchers.Main) {
-                originalList.add(0, classWithRelations)
-                notifyItemInserted(0)
+                if (classWithRelations != null) {
+                    originalList.add(0, classWithRelations)
+                    notifyItemInserted(0)
+                }
+                // Optional: Show a success message
+                Utils.showToast(context, "Added successfully")
+                Log.d("ClassListAdapter", "Class added successfully to the adapter with ID: $newId")
             }
         }
     }
@@ -188,11 +214,8 @@ class ClassListRecycleViewAdapter(
 
     // Edit Part
 
-
-    @SuppressLint("InflateParams")
     private fun showEditClassDialog(classWithRelations: ClassWithRelations) {
-        val view: View =
-            LayoutInflater.from(context).inflate(R.layout.admin_bottom_sheet_edit_class, null)
+        val view: View = LayoutInflater.from(context).inflate(R.layout.admin_bottom_sheet_edit_class, null)
         bottomSheetDialog.setContentView(view)
         val behavior = BottomSheetBehavior.from(view.parent as View)
         behavior.state = BottomSheetBehavior.STATE_EXPANDED
@@ -207,39 +230,45 @@ class ClassListRecycleViewAdapter(
         val edtAcademicYearName = view.findViewById<EditText>(R.id.edtAcademicYear)
         val btnEdit = view.findViewById<Button>(R.id.btnEditClass)
 
+        // Set initial values
         edtClassName.setText(classWithRelations.clazz.name)
-        edtMajorName.setText(classWithRelations.major?.name )
-        edtAcademicYearName.setText(classWithRelations.academicYear?.name )
 
-        edtMajorName.setOnClickListener { v: View? ->
+
+        Log.d("hanan", selectedMajor?.name.toString() )
+
+        edtMajorName.setText(classWithRelations.major?.name)
+        edtAcademicYearName.setText(classWithRelations.academicYear?.name)
+
+        // Major selection
+        edtMajorName.setOnClickListener {
             AlertDialog.Builder(context)
                 .setTitle("Select Major")
-                .setItems(majorNames) { dialog: DialogInterface?, which: Int ->
+                .setItems(majorNames) { _, which ->
                     selectedMajor = majors[which]
-                    selectedMajorId = selectedMajor?.id!!
-                    (view.findViewById<View>(R.id.edtMajor) as EditText).setText(majorNames[which])
+                    edtMajorName.setText(majorNames[which])
+                    Log.d("EditClass", "Selected Major: ${selectedMajor?.name}, ID: ${selectedMajor?.id}")
                 }
                 .show()
         }
 
-        edtAcademicYearName.setOnClickListener { v: View? ->
+        // Academic Year selection
+        edtAcademicYearName.setOnClickListener {
             AlertDialog.Builder(context)
                 .setTitle("Select Academic Year")
-                .setItems(academicYearNames) { dialog: DialogInterface?, which: Int ->
+                .setItems(academicYearNames) { _, which ->
                     selectedAcademicYear = academicYears[which]
-                    (view.findViewById<View>(R.id.edtAcademicYear) as EditText).setText(academicYearNames[which])
+                    edtAcademicYearName.setText(academicYearNames[which])
                 }
                 .show()
         }
 
-        btnEdit.setOnClickListener { v: View? ->
+        // Edit confirmation
+        btnEdit.setOnClickListener {
             AlertDialog.Builder(context)
                 .setTitle("Notification")
                 .setMessage("Confirm editing class information?")
-                .setPositiveButton("Yes") { dialog: DialogInterface?, which: Int ->
-                    performEditClass(classWithRelations, view)
-                }
-                .setNegativeButton("No") { dialog: DialogInterface, which: Int -> dialog.dismiss() }
+                .setPositiveButton("Yes") { _, _ -> performEditClass(classWithRelations, view) }
+                .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
                 .show()
         }
     }
@@ -248,65 +277,39 @@ class ClassListRecycleViewAdapter(
         if (!validateInputs(view)) return
 
         val edtClassName = view.findViewById<EditText>(R.id.edtClassName)
-        val edtMajorName = view.findViewById<EditText>(R.id.edtMajor)
-        val edtAcademicYearName = view.findViewById<EditText>(R.id.edtAcademicYear)
 
-        // Update class entity
+        // Log the original state of the class object
+        Log.d("EditClassh", "Original Class: $classWithRelations")
+
+        // Update class entity with new values
         classWithRelations.clazz.name = edtClassName.text.toString()
-        classWithRelations.clazz.majorId = selectedMajor?.id ?: classWithRelations.clazz.majorId // Ensure majorId is updated
+
+        // Update majorId and academicYearId
+        classWithRelations.clazz.majorId = selectedMajor?.id ?: classWithRelations.clazz.majorId
+        Log.d("EditClass", "Selected Major ID: ${selectedMajor?.id}")
         classWithRelations.clazz.academicYearId = selectedAcademicYear?.id ?: classWithRelations.clazz.academicYearId
 
-        // Update major entity if necessary
-        if (classWithRelations.major != null && edtMajorName.text.toString() != classWithRelations.major?.name) {
-            classWithRelations.major?.name = edtMajorName.text.toString() // Update major name if changed
-        }
+        // Update references for the UI
+        classWithRelations.major = selectedMajor
+        classWithRelations.academicYear = selectedAcademicYear
 
-        // Update academic year entity if necessary
-        if (classWithRelations.academicYear != null && edtAcademicYearName.text.toString() != classWithRelations.academicYear?.name) {
-            classWithRelations.academicYear?.name = edtAcademicYearName.text.toString() // Update academic year name if changed
-        }
+        // Log the updated state of the class object
+        Log.d("EditClassh", "Updated Class: $classWithRelations")
 
-        // Update the class and the major in the database asynchronously
+        // Update the class in the database asynchronously
         CoroutineScope(Dispatchers.IO).launch {
             val classDao = AppDatabase.getInstance(context)?.classDAO()
-            val majorDao = AppDatabase.getInstance(context)?.majorDAO()
-
-            // Update class entity
-            classDao?.update(classWithRelations.clazz)
-
-            // Update major entity if it has been edited
-            classWithRelations.major?.let {
-                majorDao?.update(it)
-            }
-
-            // Update the academic year entity
-            classWithRelations.academicYear?.let {
-                 val academicYearDao = AppDatabase.getInstance(context)?.academicYearDAO()
-                 academicYearDao?.update(it)
-            }
+            classDao?.update(classWithRelations.clazz) // Ensure this updates the DB correctly
 
             // Notify the main thread to refresh the UI
             withContext(Dispatchers.Main) {
-                editClass(originalList.indexOf(classWithRelations)) // Update the original list
-                bottomSheetDialog.dismiss() // Dismiss the dialog
-                Utils.showToast(context, "Edit successful") // Show success message
+                // Notify the adapter of the change
+                notifyItemChanged(originalList.indexOf(classWithRelations))
+                bottomSheetDialog.dismiss()
+                Utils.showToast(context, "Edit successful")
             }
         }
     }
-
-    private fun editClass(position: Int) {
-        val classWithRelations: ClassWithRelations = originalList[position]
-        CoroutineScope(Dispatchers.IO).launch {
-            // Update class in the database
-            AppDatabase.getInstance(context)?.classDAO()?.update(classWithRelations.clazz)
-
-            // Update the UI on the main thread after the update
-            withContext(Dispatchers.Main) {
-                notifyItemChanged(position)
-            }
-        }
-    }
-
 
 
 
@@ -330,10 +333,11 @@ class ClassListRecycleViewAdapter(
 
     class ClassViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView), View.OnClickListener,
         OnLongClickListener {
-        val txtClassName: TextView = itemView.findViewById<TextView>(R.id.txtClassName)
-        val txtMajorName: TextView = itemView.findViewById<TextView>(R.id.txtMajorName)
+        val txtClassName: TextView = itemView.findViewById(R.id.txtClassName)
+        val txtMajorName: TextView = itemView.findViewById(R.id.txtMajorName)
+
         val txtAcademicYearName: TextView =
-            itemView.findViewById<TextView>(R.id.txtAcademicYearName)
+            itemView.findViewById(R.id.txtAcademicYearName)
         val btnEditClass: Button = itemView.findViewById<Button>(R.id.btnEditClass)
         val btnDeleteClass: Button = itemView.findViewById<Button>(R.id.btnDeleteClass)
         private var itemClickListener: ItemClickListener? = null

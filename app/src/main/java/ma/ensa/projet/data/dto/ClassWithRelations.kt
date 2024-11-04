@@ -6,7 +6,6 @@ import androidx.room.Relation
 import ma.ensa.projet.data.entities.AcademicYear
 import ma.ensa.projet.data.entities.Major
 import ma.ensa.projet.data.entities.Classe
-import ma.ensa.projet.data.entities.Semester
 
 
 data class ClassWithRelations(

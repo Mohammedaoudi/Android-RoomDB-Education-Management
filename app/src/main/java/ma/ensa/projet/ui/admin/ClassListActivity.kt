@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import kotlinx.coroutines.CoroutineScope
 import ma.ensa.projet.R
 import ma.ensa.projet.adapters.admin.ClassListRecycleViewAdapter
 import ma.ensa.projet.data.AppDatabase
@@ -31,8 +32,9 @@ import ma.ensa.projet.data.dto.ClassWithRelations
 import ma.ensa.projet.data.entities.AcademicYear
 import ma.ensa.projet.data.entities.Classe
 import ma.ensa.projet.data.entities.Major
-import ma.ensa.projet.data.entities.Semester
 import ma.ensa.projet.utilities.Utils
+
+
 class ClassListActivity : AppCompatActivity() {
 
     private var selectedMajor: Major? = null
@@ -64,6 +66,8 @@ class ClassListActivity : AppCompatActivity() {
         handleEventListener()
     }
 
+
+
     private fun initClassListView() {
         layoutClass = findViewById(R.id.layoutClass)
         btnBack = findViewById(R.id.btnBack)
@@ -76,10 +80,12 @@ class ClassListActivity : AppCompatActivity() {
                 AppDatabase.getInstance(this@ClassListActivity)?.majorDAO()?.getAll() ?: emptyList()
             }
             val fetchedAcademicYears = withContext(Dispatchers.IO) {
-                AppDatabase.getInstance(this@ClassListActivity)?.academicYearDAO()?.getAll() ?: emptyList()
+                AppDatabase.getInstance(this@ClassListActivity)?.academicYearDAO()?.getAll()
+                    ?: emptyList()
             }
             val fetchedClasses = withContext(Dispatchers.IO) {
-                AppDatabase.getInstance(this@ClassListActivity)?.classDAO()?.getAllWithRelations() ?: emptyList()
+                AppDatabase.getInstance(this@ClassListActivity)?.classDAO()?.getAllWithRelations()
+                    ?: emptyList()
             }
 
             majors = ArrayList(fetchedMajors)
@@ -160,16 +166,22 @@ class ClassListActivity : AppCompatActivity() {
                 .setTitle("Choose Academic Year")
                 .setItems(academicYearNames) { _, which ->
                     selectedAcademicYear = academicYears[which]
-                    view.findViewById<EditText>(R.id.edtAcademicYear).setText(academicYearNames[which])
-                    Log.d("ClassListActivity", "Academic Year selected: ${selectedAcademicYear?.name}")
+                    view.findViewById<EditText>(R.id.edtAcademicYear)
+                        .setText(academicYearNames[which])
+                    Log.d(
+                        "ClassListActivity",
+                        "Academic Year selected: ${selectedAcademicYear?.name}"
+                    )
                 }
                 .show()
         }
 
         view.findViewById<Button>(R.id.btnAddClass).setOnClickListener {
             // Logging the selected values
-            Log.d("ClassListActivity", "Selected Major: ${selectedMajor?.name}, " +
-                    "Selected Academic Year: ${selectedAcademicYear?.name}")
+            Log.d(
+                "ClassListActivity", "Selected Major: ${selectedMajor?.name}, " +
+                        "Selected Academic Year: ${selectedAcademicYear?.name}"
+            )
 
             AlertDialog.Builder(this)
                 .setTitle("Notification")
@@ -181,8 +193,7 @@ class ClassListActivity : AppCompatActivity() {
     }
 
     private fun performAddClass(view: View) {
-        Log.d("ClassListActivity", "Performing Add Class with Major: $selectedMajor, " +
-                "Academic Year: $selectedAcademicYear")
+        Log.d("ClassListActivity", "Performing Add Class with Major: $selectedMajor, Academic Year: $selectedAcademicYear")
 
         if (!validateInputs(view)) {
             Log.d("ClassListActivity", "Validation failed for inputs.")
@@ -196,27 +207,18 @@ class ClassListActivity : AppCompatActivity() {
         }
 
         try {
-            val clazz = Classe(
-                name = view.findViewById<EditText>(R.id.edtClassName).text.toString(),
-                majorId = selectedMajor?.id,
-                academicYearId = selectedAcademicYear?.id
-            )
+            CoroutineScope(Dispatchers.IO).launch {
+                val className = view.findViewById<EditText>(R.id.edtClassName).text.toString()
+                val selectedMajor = selectedMajor!!
+                val selectedAcademicYear = selectedAcademicYear!!
 
-            Log.d("ClassListActivity", "Class created: $clazz")
+                // Call addClass directly on the adapter
+                classListRecycleViewAdapter.addClass(className, selectedMajor, selectedAcademicYear)
 
-            val classWithRelations = ClassWithRelations(
-                clazz = clazz,
-                major = selectedMajor!!,
-                academicYear = selectedAcademicYear!!
-            )
-
-            Log.d("ClassListActivity", "Class with relations created: $classWithRelations")
-
-            classListRecycleViewAdapter.addClass(classWithRelations)
-            bottomSheetDialog.dismiss()
-            Utils.showToast(this, "Added successfully")
-            Log.d("ClassListActivity", "Class added successfully to the adapter.")
-
+                withContext(Dispatchers.Main) {
+                    bottomSheetDialog.dismiss()
+                }
+            }
         } catch (e: Exception) {
             Log.e("AddClass", "Error adding class", e)
         }
@@ -224,20 +226,25 @@ class ClassListActivity : AppCompatActivity() {
 
 
     private fun validateInputs(view: View): Boolean {
-    return validateNotEmpty(view, R.id.edtClassName, "Class name cannot be empty") &&
-            validateNotEmpty(view, R.id.edtMajor, "Major cannot be empty") &&
-            validateNotEmpty(view, R.id.edtAcademicYear, "Academic year cannot be empty")
-}
-
-private fun validateNotEmpty(view: View, viewId: Int, errorMessage: String): Boolean {
-    val editText = view.findViewById<EditText>(viewId)
-    if (editText.text.toString().trim().isEmpty()) {
-        Utils.showToast(this, errorMessage) // Correctly reference the activity context
-        return false
+        return validateNotEmpty(view, R.id.edtClassName, "Class name cannot be empty") &&
+                validateNotEmpty(view, R.id.edtMajor, "Major cannot be empty") &&
+                validateNotEmpty(view, R.id.edtAcademicYear, "Academic year cannot be empty")
     }
-    return true
-}
+
+    private fun validateNotEmpty(view: View, viewId: Int, errorMessage: String): Boolean {
+        val editText = view.findViewById<EditText>(viewId)
+        if (editText.text.toString().trim().isEmpty()) {
+            Utils.showToast(this, errorMessage) // Correctly reference the activity context
+            return false
+        }
+        return true
+    }
+
+
 
 }
+
+
+
 
 
