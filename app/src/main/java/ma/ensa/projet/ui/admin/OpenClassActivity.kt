@@ -161,6 +161,8 @@ class OpenClassActivity : AppCompatActivity() {
 
         edtMajor.setOnClickListener {
             showSelectionDialog("Select Major", majorNames) { _, which ->
+                // Reset semester and subject selections when major changes
+                resetSelections(edtSemester, edtSubject)
                 selectedMajorId = majors[which].id
                 edtMajor.setText(majorNames[which])
                 loadSemestersForSelectedMajor(selectedMajorId) // Load semesters for selected major
@@ -183,8 +185,16 @@ class OpenClassActivity : AppCompatActivity() {
             // Fetch subjects based on selected semester in the background
             lifecycleScope.launch {
                 subjects = withContext(Dispatchers.IO) {
-                    ArrayList(AppDatabase.getInstance(this@OpenClassActivity)?.subjectDAO()?.getBySemester(selectedSemesterId) ?: listOf())
+                    ArrayList(
+                        AppDatabase.getInstance(this@OpenClassActivity)?.subjectDAO()
+                            ?.getBySemester(selectedSemesterId) ?: listOf()
+                    )
+
+
                 }
+
+                Log.d("openclassTestopen", selectedSemesterId.toString())
+
                 subjectNames = ArrayList(subjects.size)
                 subjects.forEach { subjectNames.add(it.subject.name) }
 
@@ -205,16 +215,17 @@ class OpenClassActivity : AppCompatActivity() {
                     edtLecturer.setText(lecturerNames[which])
                 }
             }
+
+            btnOpenClass.setOnClickListener {
+                AlertDialog.Builder(this)
+                    .setTitle("Notification")
+                    .setMessage("Open class?")
+                    .setPositiveButton("Yes") { _, _ -> performOpenClass() }
+                    .setNegativeButton("No", null)
+                    .show()
+            }
         }
 
-        btnOpenClass.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Notification")
-                .setMessage("Open class?")
-                .setPositiveButton("Yes") { _, _ -> performOpenClass() }
-                .setNegativeButton("No", null)
-                .show()
-        }
     }
 
     private fun loadSemestersForSelectedMajor(majorId: Long) {

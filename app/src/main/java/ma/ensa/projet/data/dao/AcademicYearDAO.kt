@@ -14,6 +14,11 @@ interface AcademicYearDAO {
     @Query("SELECT * FROM academic_years ORDER BY id DESC")
     fun getAll(): List<AcademicYear>
 
+
+    @Query("SELECT * FROM academic_years WHERE name = :name")
+    fun getAcademicYearByName(name: String): AcademicYear?
+
+
     @Query("SELECT * FROM academic_years WHERE id = :id")
     fun getById(id: Long): AcademicYear
 

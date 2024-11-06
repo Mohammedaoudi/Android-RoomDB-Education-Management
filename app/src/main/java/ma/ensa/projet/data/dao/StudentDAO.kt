@@ -29,6 +29,9 @@ interface StudentDAO {
     fun getByUser(userId: Long): Student
 
 
+    @Query("UPDATE students SET major_id = :newMajorId WHERE class_id = :classId")
+    suspend fun updateStudentsMajorByClassId(classId: Long, newMajorId: Long)
+
     @Query("""
         SELECT s.* FROM students s 
         JOIN users u ON s.user_id = u.id 

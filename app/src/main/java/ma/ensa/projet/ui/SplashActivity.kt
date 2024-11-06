@@ -34,7 +34,7 @@ class SplashActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             // Initialize the database you can comment this after
-            AppDatabase.initializeDatabase(this@SplashActivity)
+//            AppDatabase.initializeDatabase(this@SplashActivity)
 
             delay(3000)
 

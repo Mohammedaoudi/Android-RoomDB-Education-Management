@@ -26,9 +26,11 @@ import ma.ensa.projet.R
 import ma.ensa.projet.adapters.admin.listener.ItemClickListener
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.dto.ClassWithRelations
+import ma.ensa.projet.data.dto.SubjectWithRelations
 import ma.ensa.projet.data.entities.AcademicYear
 import ma.ensa.projet.data.entities.Classe
 import ma.ensa.projet.data.entities.Major
+import ma.ensa.projet.data.entities.SubjectSemesterCrossRef
 import ma.ensa.projet.ui.admin.StudentListActivity
 import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
@@ -277,41 +279,173 @@ class ClassListRecycleViewAdapter(
         if (!validateInputs(view)) return
 
         val edtClassName = view.findViewById<EditText>(R.id.edtClassName)
+        val oldMajorId = classWithRelations.clazz.majorId
 
-        // Log the original state of the class object
-        Log.d("EditClassh", "Original Class: $classWithRelations")
+        Log.d("EditClass", "Starting edit process for class: ${classWithRelations.clazz.name}")
+        Log.d("EditClass", "Old major ID: $oldMajorId, New major ID: ${selectedMajor?.id}")
 
         // Update class entity with new values
-        classWithRelations.clazz.name = edtClassName.text.toString()
-
-        // Update majorId and academicYearId
-        classWithRelations.clazz.majorId = selectedMajor?.id ?: classWithRelations.clazz.majorId
-        Log.d("EditClass", "Selected Major ID: ${selectedMajor?.id}")
-        classWithRelations.clazz.academicYearId = selectedAcademicYear?.id ?: classWithRelations.clazz.academicYearId
+        classWithRelations.clazz.apply {
+            name = edtClassName.text.toString()
+            majorId = selectedMajor?.id ?: majorId
+            academicYearId = selectedAcademicYear?.id ?: academicYearId
+        }
 
         // Update references for the UI
         classWithRelations.major = selectedMajor
         classWithRelations.academicYear = selectedAcademicYear
 
-        // Log the updated state of the class object
-        Log.d("EditClassh", "Updated Class: $classWithRelations")
-
-        // Update the class in the database asynchronously
         CoroutineScope(Dispatchers.IO).launch {
-            val classDao = AppDatabase.getInstance(context)?.classDAO()
-            classDao?.update(classWithRelations.clazz) // Ensure this updates the DB correctly
+            try {
+                val db = AppDatabase.getInstance(context)
+                Log.d("EditClass", "Database instance obtained")
 
-            // Notify the main thread to refresh the UI
-            withContext(Dispatchers.Main) {
-                // Notify the adapter of the change
-                notifyItemChanged(originalList.indexOf(classWithRelations))
-                bottomSheetDialog.dismiss()
-                Utils.showToast(context, "Edit successful")
+                // Get all subjects for this class
+                val subjectsWithRelations = db?.subjectDAO()?.getSubjectsWithRelationsByClassId(classWithRelations.clazz.id)
+                Log.d("EditClass", "Retrieved ${subjectsWithRelations} subjects for class")
+
+
+
+                withContext(Dispatchers.Main) {
+                        performClassUpdate(db, classWithRelations, subjectsWithRelations, view)
+                    }
+
+            } catch (e: Exception) {
+                Log.e("EditClass", "Error during edit process", e)
+                withContext(Dispatchers.Main) {
+                    Utils.showToast(context, "Error updating: ${e.message}")
+                }
             }
         }
     }
 
+    private fun performClassUpdate(
+        db: AppDatabase?,
+        classWithRelations: ClassWithRelations,
+        subjectsWithRelations: List<SubjectWithRelations>?,
+        view: View
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d("ClassUpdate", "Starting class update process")
 
+                // Update the class
+                db?.classDAO()?.update(classWithRelations.clazz)
+                Log.d("ClassUpdate", "Class updated successfully")
+
+                // Update students' major
+                db?.studentDAO()?.updateStudentsMajorByClassId(
+                    classId = classWithRelations.clazz.id,
+                    newMajorId = classWithRelations.clazz.majorId!!
+                )
+                Log.d("ClassUpdate", "Students' major updated successfully")
+
+                var updatedCount = 0
+
+                // Get all semesters for the new major
+                val newMajorSemesters = classWithRelations.clazz.majorId?.let {
+                    db?.semesterDAO()?.getSemestersByMajorId(it)
+                } ?: emptyList()
+
+                // Update all subjects
+                subjectsWithRelations?.forEach { subjectWithRelations ->
+                    Log.d("ClassUpdate", "Processing subject: ${subjectWithRelations.subject.name}")
+
+                    try {
+                        // Update the subject's majorId
+                        subjectWithRelations.subject.majorId = classWithRelations.clazz.majorId!!
+
+                        // Get current semester name
+                        val currentSemesterName = subjectWithRelations.semesterId?.let { semesterId ->
+                            db?.semesterDAO()?.getSemesterById(semesterId)?.name
+                        }
+                        Log.d("ClassUpdate", "Current semester name: $currentSemesterName")
+
+                        // Find matching semester by name or use first semester as fallback
+                        val matchingSemester = if (currentSemesterName != null) {
+                            newMajorSemesters.find { it.name == currentSemesterName }
+                        } else {
+                            newMajorSemesters.firstOrNull()
+                        }
+
+                        if (matchingSemester != null) {
+                            // Update the semesterId in SubjectWithRelations
+                            subjectWithRelations.semesterId = matchingSemester.id
+                            Log.d("ClassUpdate", "Updated semesterId to ${matchingSemester.id} (${matchingSemester.name})")
+
+                            // Remove old semester associations
+                            db?.subjectSemesterCrossRefDAO()?.deleteBySubjectId(subjectWithRelations.subject.id)
+
+                            // Create new semester association
+                            val crossRef = SubjectSemesterCrossRef(
+                                subjectId = subjectWithRelations.subject.id,
+                                semesterId = matchingSemester.id
+                            )
+                            db?.subjectSemesterCrossRefDAO()?.insert(crossRef)
+                            Log.d("ClassUpdate", "Created new semester association")
+                        } else {
+                            // If no matching semester found, trigger a dialog to remove the subject
+                            withContext(Dispatchers.Main) {
+                                showRemoveSubjectDialog(subjectWithRelations, db)
+                            }
+                        }
+
+                        // Update the subject in the database
+                        db?.subjectDAO()?.update(subjectWithRelations.subject)
+                        updatedCount++
+                        Log.d("ClassUpdate", "Subject updated successfully")
+                    } catch (e: Exception) {
+                        Log.e("ClassUpdate", "Error updating subject: ${subjectWithRelations.subject.name}", e)
+                        Log.e("ClassUpdate", "Error details: ${e.message}")
+                        e.printStackTrace()
+                    }
+                }
+
+                Log.d("ClassUpdate", "Update summary: Updated $updatedCount subjects")
+
+                withContext(Dispatchers.Main) {
+                    notifyItemChanged(originalList.indexOf(classWithRelations))
+                    bottomSheetDialog.dismiss()
+                    Utils.showToast(context, "Edit successful")
+                    Log.d("ClassUpdate", "Update completed successfully")
+                }
+            } catch (e: Exception) {
+                Log.e("ClassUpdate", "Error during update process", e)
+                withContext(Dispatchers.Main) {
+                    Utils.showToast(context, "Error updating: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun showRemoveSubjectDialog(subjectWithRelations: SubjectWithRelations, db: AppDatabase?) {
+        AlertDialog.Builder(context)
+            .setTitle("No Matching Semester")
+            .setMessage("No matching semester found for subject: ${subjectWithRelations.subject.name}. Do you want to remove this subject?")
+            .setPositiveButton("Yes") { dialog, _ ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        // Remove the subject from the class and database
+                        db?.subjectDAO()?.delete(subjectWithRelations.subject)
+                        Log.d("RemoveSubject", "Subject removed from class and database")
+
+                        withContext(Dispatchers.Main) {
+                            Utils.showToast(context, "Subject removed successfully")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("RemoveSubject", "Error removing subject", e)
+                        withContext(Dispatchers.Main) {
+                            Utils.showToast(context, "Error removing subject: ${e.message}")
+                        }
+                    }
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton("No") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
+    }
 
 
 

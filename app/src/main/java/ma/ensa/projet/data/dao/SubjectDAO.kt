@@ -8,6 +8,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 
 @Dao
@@ -26,13 +27,31 @@ interface SubjectDAO {
 
 
     @Query("""
-    SELECT s.*, ssr.semester_id AS semesterId 
-    FROM subjects s 
-    LEFT JOIN subject_semester_cross_ref ssr ON s.id = ssr.subject_id 
-    WHERE s.id = :id 
+    SELECT s.*, ssr.semester_id AS semesterId, 
+           c.id AS classId, c.name AS className, 
+           m.id AS majorId, m.name AS majorName
+    FROM subjects s
+    LEFT JOIN subject_semester_cross_ref ssr ON s.id = ssr.subject_id
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN majors m ON s.major_id = m.id
+    WHERE s.class_id = :classId
+    ORDER BY s.name
+""")
+    fun getSubjectsWithRelationsByClassId(classId: Long): List<SubjectWithRelations>
+
+    @Query("""
+    SELECT s.*, ssr.semester_id AS semesterId, 
+           c.id AS classId, c.name AS className, 
+           m.id AS majorId, m.name AS majorName
+    FROM subjects s
+    LEFT JOIN subject_semester_cross_ref ssr ON s.id = ssr.subject_id
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN majors m ON s.major_id = m.id
+    WHERE s.id = :id
     ORDER BY s.name
 """)
     fun getSubjectWithRelationsById(id: Long): SubjectWithRelations?
+
 
 
     @Query("SELECT * FROM subjects WHERE id = :id")

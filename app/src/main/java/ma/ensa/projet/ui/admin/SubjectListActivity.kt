@@ -83,7 +83,7 @@ class SubjectListActivity : AppCompatActivity() {
                 val subjects = ArrayList(db?.subjectDAO()?.getAllWithRelations() ?: listOf())
                 Log.d(
                     "SubjectListActivity", "Subjects from DB: ${
-                        subjects.joinToString { it.subject.name }
+                        subjects
                     }")
 
                 withContext(Dispatchers.Main) {

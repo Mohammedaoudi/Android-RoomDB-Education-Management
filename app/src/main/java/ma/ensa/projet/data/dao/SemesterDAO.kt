@@ -25,6 +25,9 @@ interface SemesterDAO {
     @Query("SELECT * FROM semesters WHERE major_id  = :majorId")
     suspend fun getSemestersByMajorId(majorId: Long?): List<Semester>
 
+    @Query("SELECT * FROM semesters WHERE id = :semesterId")
+    suspend fun getSemesterById(semesterId: Long): Semester?
+
 
     @Insert
     fun insert(semester: Semester): Long

@@ -30,6 +30,7 @@ import ma.ensa.projet.data.dto.SubjectWithRelations
 import ma.ensa.projet.data.entities.Classe
 import ma.ensa.projet.data.entities.Major
 import ma.ensa.projet.data.entities.Semester
+import ma.ensa.projet.data.entities.SubjectSemesterCrossRef
 import ma.ensa.projet.ui.admin.StudentListActivity
 import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
@@ -98,6 +99,7 @@ class SubjectListRecycleViewAdapter(
             txtSubjectName.text = subjectWithRelations.subject.name
             txtClassName.text = subjectWithRelations.clazz.name
             txtMajorName.text = subjectWithRelations.major.name
+
             txtSubjectCredits.text = subjectWithRelations.subject.credits.toString()
 
             // Fetch semester name using DAO
@@ -109,7 +111,9 @@ class SubjectListRecycleViewAdapter(
                         )
                     }
                 withContext(Dispatchers.Main) {
-                    txtSemester.text = semester?.name ?: "N/A" // Handle the case where semester is null
+                    txtSemester.text = semester?.name ?: "N/A"
+                    semester?.name?.let { Log.d("EditSemestre", it) }
+                Log.d("EditSemestre2", subjectWithRelations.semesterId.toString())// Handle the case where semester is null
                 }
             }
 
@@ -194,7 +198,10 @@ class SubjectListRecycleViewAdapter(
         Log.d("tatatt", edtSemesterName.text.toString())
 
         // Initially disable class and semester selection until a major is selected
-        edtClassName.isEnabled = false
+        edtClassName.isEnabled = true
+        edtSemesterName.isEnabled = true  // Enable since we have both major and class
+
+        updateSemestersForMajor(selectedMajor!!.id, view)
 
         // Major selection
         edtMajorName.setOnClickListener {
@@ -212,6 +219,8 @@ class SubjectListRecycleViewAdapter(
                         edtClassName.setText("") // Clear class selection
                         edtSemesterName.setText("") // Clear semester selection
                         edtClassName.isEnabled = true // Enable class selection now that major is selected
+                        edtSemesterName.isEnabled = false
+
                     }
                     .show()
             } else {
@@ -230,6 +239,8 @@ class SubjectListRecycleViewAdapter(
                         Log.d("selectesggg", selectedClass.toString())
                         edtClassName.setText(selectedClass?.name)
                         // Clear semester selection
+                        edtSemesterName.isEnabled = true
+
                         updateSemestersForMajor(selectedClass!!.majorId, view)
                     }
                     .show()
@@ -240,18 +251,25 @@ class SubjectListRecycleViewAdapter(
 
         // Semester selection
         edtSemesterName.setOnClickListener {
-            if (selectedClass == null) {
-                Utils.showToast(context, "Please select a class first")
-            } else if (semesters.isNotEmpty()) {
-                AlertDialog.Builder(context)
-                    .setTitle("Select Semester")
-                    .setItems(semesterNames) { _, which ->
-                        selectedSemesterId = semesters[which].id
-                        edtSemesterName.setText(semesterNames[which])
-                    }
-                    .show()
-            } else {
-                Utils.showToast(context, "No semesters available for the selected class")
+            if (selectedMajor == null ) {
+            Utils.showToast(context, "Please select a major first")
+
+          } else {
+            val majorSemesters = semesters.filter { it.majorId == selectedMajor!!.id }
+            val majorSemesterNames = majorSemesters.map { it.name }.toTypedArray()
+
+            if (majorSemesterNames.isEmpty()) {
+                Utils.showToast(context, "No semesters available for the selected major")
+                return@setOnClickListener
+            }
+
+            AlertDialog.Builder(context)
+                .setTitle("Select Semester")
+                .setItems(majorSemesterNames) { _, which ->
+                    selectedSemesterId = majorSemesters[which].id
+                    edtSemesterName.setText(majorSemesterNames[which])
+                }
+                .show()
             }
         }
 
@@ -266,7 +284,6 @@ class SubjectListRecycleViewAdapter(
                 .show()
         }
     }
-
     private fun performEditSubject(subjectWithRelations: SubjectWithRelations, view: View) {
         if (!validateInputs(view)) return
 
@@ -277,51 +294,61 @@ class SubjectListRecycleViewAdapter(
         subjectWithRelations.subject.apply {
             name = edtSubjectName.text.toString()
             credits = edtSubjectCredits.text.toString().toIntOrNull() ?: 0
-
-            // Update class and major IDs, retaining existing values if not changed
             classId = selectedClass?.id!!
             majorId = selectedMajor?.id!!
         }
 
-
         subjectWithRelations.clazz = selectedClass!!
         subjectWithRelations.major = selectedMajor!!
+        subjectWithRelations.semesterId = selectedSemesterId  // Update the semesterId
+
         val position = filteredList.indexOfFirst { it.subject.id == subjectWithRelations.subject.id }
         if (position != -1) {
-            editSubject(subjectWithRelations, position) // Update the subject in the database
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val db = AppDatabase.getInstance(context)
+
+                    // Update the subject in the database
+                    db?.subjectDAO()?.update(subjectWithRelations.subject)
+
+                    // First delete existing cross reference
+                    db?.subjectSemesterCrossRefDAO()?.deleteBySubjectId(subjectWithRelations.subject.id)
+
+                    // Then insert the new cross reference
+                    selectedSemesterId?.let { semesterId ->
+                        val crossRef = SubjectSemesterCrossRef(
+                            subjectId = subjectWithRelations.subject.id,
+                            semesterId = semesterId
+                        )
+                        db?.subjectSemesterCrossRefDAO()?.insert(crossRef)
+
+                        Log.d("openclassTest", "Inserted semesterId: $semesterId for subjectId: ${subjectWithRelations.subject.id}")
+
+                        // Verification step: Retrieve and log to confirm semesterId is saved
+                        val verifSub = db?.subjectDAO()?.getSubjectsWithRelationsByClassId(subjectWithRelations.clazz.id)
+                        Log.d("openclassTest", "Verified Subject: ${verifSub}")
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        if (position in filteredList.indices) {
+                            filteredList[position] = subjectWithRelations
+                            notifyItemChanged(position)
+                            bottomSheetDialog.dismiss()
+                            Utils.showToast(context, "Successfully edited")
+                        } else {
+                            Utils.showToast(context, "Position out of bounds for filtered list")
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Utils.showToast(context, "Error updating subject: ${e.message}")
+                    }
+                }
+            }
         } else {
             Utils.showToast(context, "Subject not found in the list")
         }
-
-        bottomSheetDialog.dismiss()
-        Utils.showToast(context, "Successfully edited")
     }
-
-    private fun editSubject(subjectWithRelations: SubjectWithRelations, position: Int) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // Update the subject in the database
-            AppDatabase.getInstance(context)?.subjectDAO()?.update(subjectWithRelations.subject)
-
-            // Switch back to the main thread to update the UI
-            withContext(Dispatchers.Main) {
-                // Update the filtered list with edited subject
-                if (position in filteredList.indices) {
-                    // Create a new SubjectWithRelations object if necessary
-                    val updatedSubjectWithRelations = SubjectWithRelations(
-                        subject = subjectWithRelations.subject,
-                        clazz = filteredList[position].clazz, // Use existing class
-                        major = filteredList[position].major, // Use existing major
-                        semesterId = filteredList[position].semesterId // Use existing semester
-                    )
-                    filteredList[position] = updatedSubjectWithRelations // Replace the old object
-                    notifyItemChanged(position) // Notify adapter of the change
-                } else {
-                    Utils.showToast(context, "Position out of bounds for filtered list")
-                }
-            }
-        }
-    }
-
 
     private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
         CoroutineScope(Dispatchers.Main).launch {            // Fetch classes asynchronously based on major
