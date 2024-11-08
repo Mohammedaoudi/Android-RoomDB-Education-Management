@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import ma.ensa.projet.data.dto.StudentWithRelations
 import ma.ensa.projet.data.entities.Student
@@ -32,45 +33,32 @@ interface StudentDAO {
     @Query("UPDATE students SET major_id = :newMajorId WHERE class_id = :classId")
     suspend fun updateStudentsMajorByClassId(classId: Long, newMajorId: Long)
 
-    @Query("""
-        SELECT s.* FROM students s 
-        JOIN users u ON s.user_id = u.id 
-        JOIN student_semester_cross_ref ssc ON s.id = ssc.student_id 
-        WHERE ssc.semester_id = :semesterId 
-        ORDER BY u.full_name
-    """)
-    fun getBySemester(semesterId: Long): List<StudentWithRelations>
 
 
     @Query("SELECT * FROM students WHERE class_id = :classId")
     suspend fun getByClass(classId: Long): List<StudentWithRelations>
 
 
+    @Transaction
+    @Query("""
+    SELECT s.* 
+    FROM students s
+    INNER JOIN users u ON s.user_id = u.id
+    WHERE s.class_id = :classId
+""")
+    suspend fun getByClassIn(classId: Long): List<StudentWithRelations>
+
     @Query("SELECT * FROM students WHERE class_id = :classId ORDER BY id DESC")
     fun getByClassSL(classId: Long): List<Student>
 
+    @Transaction
     @Query("""
-        SELECT s.* FROM students s 
-        JOIN users u ON s.user_id = u.id 
-        JOIN student_semester_cross_ref sscr ON s.id = sscr.student_id 
-        JOIN student_subject_cross_ref ssur ON s.id = ssur.student_id 
-        JOIN subjects subj ON ssur.subject_id= subj.id 
-        WHERE sscr.semester_id = :semesterId AND subj.class_id = :classId 
-        ORDER BY u.full_name
+        SELECT * FROM students s
+        INNER JOIN majors m ON s.major_id = m.id
+        WHERE s.class_id = :classId AND s.major_id = :majorId
     """)
-    fun getBySemesterClass(semesterId: Long, classId: Long): List<StudentWithRelations>
+    suspend fun getByClassAndMajor(classId: Long, majorId: Long): List<StudentWithRelations>
 
-    @Query("""
-        SELECT s.* FROM students s 
-        JOIN users u ON s.user_id = u.id 
-        JOIN student_semester_cross_ref sscr ON s.id = sscr.student_id 
-        JOIN student_subject_cross_ref ssur ON s.id = ssur.student_id 
-        JOIN subjects subj ON ssur.subject_id= subj.id 
-        WHERE sscr.semester_id = :semesterId AND subj.class_id = :classId AND ssur.subject_id = :subjectId 
-        GROUP BY s.id 
-        ORDER BY u.full_name
-    """)
-    fun getBySemesterClassSubject(semesterId: Long, classId: Long, subjectId: Long): List<StudentWithRelations>
 
     @Query("SELECT COUNT(*) FROM students")
     fun count(): Int

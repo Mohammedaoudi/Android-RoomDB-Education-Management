@@ -1,7 +1,6 @@
 package ma.ensa.projet.data.dao
 
 import ma.ensa.projet.data.entities.LecturerSubjectCrossRef
-import ma.ensa.projet.data.entities.StudentSemesterCrossRef
 import ma.ensa.projet.data.entities.StudentSubjectCrossRef
 import ma.ensa.projet.data.entities.SubjectSemesterCrossRef
 import androidx.room.Dao
@@ -10,6 +9,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import ma.ensa.projet.data.entities.Semester
+import ma.ensa.projet.data.entities.User
 
 
 @Dao
@@ -18,14 +18,17 @@ interface CrossRefDAO {
     @Query("SELECT * FROM lecturer_subject_cross_ref ORDER BY id DESC")
     fun getAllLecturerSubjectCrossRef(): List<LecturerSubjectCrossRef>
 
-    @Query("SELECT * FROM student_semester_cross_ref ORDER BY id DESC")
-    fun getAllStudentSemesterCrossRef(): List<StudentSemesterCrossRef>
 
     @Query("SELECT * FROM student_subject_cross_ref ORDER BY id DESC")
     fun getAllStudentSubjectCrossRef(): List<StudentSubjectCrossRef>
 
-    @Query("SELECT * FROM subject_semester_cross_ref ORDER BY id DESC")
+    @Query("SELECT * FROM subject_semester_cross_ref ")
     fun getAllSubjectSemesterCrossRef(): List<SubjectSemesterCrossRef>
+
+
+    @Query("SELECT subject_id FROM lecturer_subject_cross_ref WHERE lecturer_id = :lecturerId")
+    suspend fun getSubjectsByLecturer(lecturerId: Long): List<Long>
+
 
     @Query("""
         SELECT * FROM lecturer_subject_cross_ref 
@@ -44,25 +47,27 @@ interface CrossRefDAO {
 
     // Add these debug queries
     @Query("""
-        SELECT * FROM lecturer_subject_cross_ref 
-        WHERE lecturer_id = :lecturerId
-    """)
-    fun getLecturerSubjects(lecturerId: Long): List<LecturerSubjectCrossRef>
+    SELECT * FROM lecturer_subject_cross_ref 
+    WHERE subject_id = :subjectId
+""")
+    fun getLecturerSubjects(subjectId: Long): List<LecturerSubjectCrossRef>
 
     @Query("""
-        SELECT * FROM subject_semester_cross_ref 
-        WHERE subject_id IN 
-        (SELECT subject_id FROM lecturer_subject_cross_ref WHERE lecturer_id = :lecturerId)
+        DELETE FROM lecturer_subject_cross_ref 
+        WHERE subject_id = :subjectId
     """)
-    fun getSubjectSemestersByLecturerId(lecturerId: Long): List<SubjectSemesterCrossRef>
-
-
+    suspend fun deleteLecturerSubjectCrossRefBySubjectId(subjectId: Long)
 
     @Query("""
-        SELECT * FROM student_semester_cross_ref 
-        WHERE student_id = :studentId AND semester_id = :semesterId
+        SELECT u.id, u.full_name, u.gender, u.date_of_birth, u.address, u.email, u.avatar, u.role 
+        FROM users u 
+        INNER JOIN lecturers l ON l.user_id = u.id 
+        INNER JOIN lecturer_subject_cross_ref ls ON ls.lecturer_id = l.id 
+        WHERE ls.subject_id = :subjectId
     """)
-    fun getStudentSemesterCrossRef(studentId: Long, semesterId: Long): StudentSemesterCrossRef
+    fun getLecturerDetailsForSubject(subjectId: Long): List<User>
+
+
 
     @Query("""
         SELECT * FROM student_subject_cross_ref 
@@ -79,8 +84,6 @@ interface CrossRefDAO {
     @Insert
     fun insertLecturerSubjectCrossRef(lecturerSubjectCrossRef: LecturerSubjectCrossRef)
 
-    @Insert
-    fun insertStudentSemesterCrossRef(studentSemesterCrossRef: StudentSemesterCrossRef)
 
     @Insert
     fun insertStudentSubjectCrossRef(studentSubjectCrossRef: StudentSubjectCrossRef)
@@ -91,8 +94,6 @@ interface CrossRefDAO {
     @Update
     fun updateLecturerSubjectCrossRef(lecturerSubjectCrossRef: LecturerSubjectCrossRef)
 
-    @Update
-    fun updateStudentSemesterCrossRef(studentSemesterCrossRef: StudentSemesterCrossRef)
 
     @Update
     fun updateStudentSubjectCrossRef(studentSubjectCrossRef: StudentSubjectCrossRef)
@@ -103,8 +104,6 @@ interface CrossRefDAO {
     @Delete
     fun deleteLecturerSubjectCrossRef(lecturerSubjectCrossRef: LecturerSubjectCrossRef)
 
-    @Delete
-    fun deleteStudentSemesterCrossRef(studentSemesterCrossRef: StudentSemesterCrossRef)
 
     @Delete
     fun deleteStudentSubjectCrossRef(studentSubjectCrossRef: StudentSubjectCrossRef)

@@ -1,11 +1,13 @@
 package ma.ensa.projet.ui.admin
 
 import android.content.DialogInterface
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.graphics.Insets
@@ -52,12 +54,16 @@ class OpenClassActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.admin_activity_open_class)
 
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars: Insets = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
+        // Retrieve the data passed from the previous activity
+        selectedSubjectId = intent.getLongExtra("selectedSubjectId", 0)
+        selectedLecturerId = intent.getLongExtra("selectedLecturerId", 0)
+        selectedSemesterId = intent.getLongExtra("selectedSemesterId", 0)
+        selectedMajorId = intent.getLongExtra("selectedMajorId", 0)
 
+        // Log or use these values as needed
+        Log.d("OpenClassActivity", "Subject ID: $selectedSubjectId, Lecturer ID: $selectedLecturerId, Semester ID: $selectedSemesterId, Major ID: $selectedMajorId")
+
+        // Continue with your initialization code
         initCreateClassView()
         handleEventListener()
     }
@@ -70,22 +76,65 @@ class OpenClassActivity : AppCompatActivity() {
         edtMajor = findViewById(R.id.edtMajor)
         btnOpenClass = findViewById(R.id.btnOpenClass)
 
+        // Fetch data for Majors, Lecturers, and Semesters
         lifecycleScope.launch {
-            // Fetch majors in background
+            // Fetch majors and populate major names
             majors = withContext(Dispatchers.IO) {
                 ArrayList(AppDatabase.getInstance(this@OpenClassActivity)?.majorDAO()?.getAll() ?: listOf())
             }
             majorNames = ArrayList(majors.size)
             majors.forEach { it.name?.let { it1 -> majorNames.add(it1) } }
 
-            // Fetch lecturers in background
+            // Fetch lecturers and populate lecturer names
             lecturers = withContext(Dispatchers.IO) {
                 ArrayList(AppDatabase.getInstance(this@OpenClassActivity)?.userDAO()?.getByRole(Constants.Role.LECTURER) ?: listOf())
             }
             lecturerNames = ArrayList(lecturers.size)
             lecturers.forEach { it.fullName?.let { name -> lecturerNames.add(name) } }
+
+            // Load Semesters for the selected major
+            loadSemestersForSelectedMajor(selectedMajorId)
+
+            // Set initial values if available (preselect the passed values)
+            setInitialValues()
         }
     }
+
+    private fun setInitialValues() {
+        // Set initial values for subject, lecturer, semester, and major
+        lifecycleScope.launch {
+            // Get selected subject
+            val selectedSubject = withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(this@OpenClassActivity)?.subjectDAO()?.getById(selectedSubjectId)
+            }
+            selectedSubject?.let {
+                edtSubject.setText(it.name)
+            }
+
+            // Get selected lecturer
+            val selectedLecturer = withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(this@OpenClassActivity)?.userDAO()?.getById(selectedLecturerId)
+            }
+            selectedLecturer?.let {
+                edtLecturer.setText(it.fullName)
+            }
+
+            // Get selected semester
+            val selectedSemester = withContext(Dispatchers.IO) {
+                AppDatabase.getInstance(this@OpenClassActivity)?.semesterDAO()?.getById(selectedSemesterId)
+            }
+            selectedSemester?.let {
+                edtSemester.setText(it.name)
+            }
+
+            // Get selected major
+            val selectedMajor = majors.find { it.id == selectedMajorId }
+            selectedMajor?.let {
+                edtMajor.setText(it.name)
+            }
+        }
+    }
+
 
     private fun performOpenClass() {
         lifecycleScope.launch {
@@ -97,18 +146,6 @@ class OpenClassActivity : AppCompatActivity() {
                     val allLecturerSubjects = db?.crossRefDAO()?.getAllLecturerSubjectCrossRef()
                     val allSubjectSemesters = db?.crossRefDAO()?.getAllSubjectSemesterCrossRef()
 
-                    Log.d("ExistingRelationships", """
-                ---- Current Selection ----
-                Selected Lecturer ID: $selectedLecturerId
-                Selected Subject ID: $selectedSubjectId
-                Selected Semester ID: $selectedSemesterId
-
-                ---- All Lecturer-Subject Relations ----
-                $allLecturerSubjects
-
-                ---- All Subject-Semester Relations ----
-                $allSubjectSemesters
-                """.trimIndent())
 
                     // Check for lecturer-subject relationship
                     val lecturerSubjectExists = db?.crossRefDAO()?.getLecturerSubjectCrossRef(
@@ -137,7 +174,13 @@ class OpenClassActivity : AppCompatActivity() {
 
                         withContext(Dispatchers.Main) {
                             Utils.showToast(this@OpenClassActivity, "Class created successfully")
-                            finish()
+                            // Set the result to return assigned lecturer and subject IDs
+                            val resultIntent = Intent().apply {
+                                putExtra("assignedLecturerId", selectedLecturerId)
+                                putExtra("assignedSubjectId", selectedSubjectId)
+                            }
+                            setResult(RESULT_OK, resultIntent)
+                            finish() // Close the activity and return to the previous screen
                         }
                     } catch (e: Exception) {
                         Log.e("InsertError", "Error inserting lecturer-subject relationship", e)
@@ -177,30 +220,23 @@ class OpenClassActivity : AppCompatActivity() {
         }
 
         edtSubject.setOnClickListener {
-            if (edtSemester.text.toString().isEmpty()) {
-                Utils.showToast(this, "Semester not selected")
+            if (edtSemester.text.toString().isEmpty() || edtMajor.text.toString().isEmpty()) {
+                Utils.showToast(this, "Major and Semester must be selected first")
                 return@setOnClickListener
             }
 
-            // Fetch subjects based on selected semester in the background
             lifecycleScope.launch {
-                subjects = withContext(Dispatchers.IO) {
-                    ArrayList(
-                        AppDatabase.getInstance(this@OpenClassActivity)?.subjectDAO()
-                            ?.getBySemester(selectedSemesterId) ?: listOf()
-                    )
+                // Load subjects and initialize `subjectNames`
+                loadSubjectsForSelectedMajorAndSemester(selectedMajorId, selectedSemesterId)
 
-
-                }
-
-                Log.d("openclassTestopen", selectedSemesterId.toString())
-
-                subjectNames = ArrayList(subjects.size)
-                subjects.forEach { subjectNames.add(it.subject.name) }
-
-                showSelectionDialog("Select Subject", subjectNames) { _, which ->
-                    selectedSubjectId = subjects[which].subject.id
-                    edtSubject.setText(subjectNames[which])
+                // Wait until `subjectNames` is initialized
+                if (subjectNames.isNotEmpty()) {
+                    showSelectionDialog("Select Subject", subjectNames) { _, which ->
+                        selectedSubjectId = subjects[which].subject.id
+                        edtSubject.setText(subjectNames[which])
+                    }
+                } else {
+                    Toast.makeText(this@OpenClassActivity, "No subjects available", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -246,6 +282,19 @@ class OpenClassActivity : AppCompatActivity() {
 
 
 
+    private suspend fun loadSubjectsForSelectedMajorAndSemester(majorId: Long, semesterId: Long) {
+        withContext(Dispatchers.IO) {
+            subjects = ArrayList(
+                AppDatabase.getInstance(this@OpenClassActivity)?.subjectDAO()
+                    ?.getByMajorAndSemester(majorId, semesterId) ?: listOf()
+            )
+        }
+        // Populate `subjectNames` with subject names after fetching `subjects`
+        subjectNames = ArrayList<String>(subjects.size).apply {
+            subjects.forEach { add(it.subject.name) }
+        }
+
+    }
 
     private fun showSelectionDialog(title: String, options: List<String>, listener: DialogInterface.OnClickListener) {
         AlertDialog.Builder(this).apply {

@@ -22,6 +22,7 @@ import android.widget.ImageView
 import android.widget.RadioGroup
 import android.widget.RelativeLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
@@ -313,51 +314,6 @@ class StudentListActivity : AppCompatActivity() {
     }
 
 
-    private fun updateStudentList() {
-        lifecycleScope.launch {
-            val students: List<StudentWithRelations?>? = withContext(Dispatchers.IO) {
-                when {
-                    selectedMajorId > 0 && selectedClassId > 0 -> {
-                        Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId and Class ID: $selectedClassId")
-                        AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
-                            ?.getByMajorClass(selectedMajorId, selectedClassId)
-                    }
-                    selectedMajorId > 0 -> {
-                        Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId")
-                        AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
-                            ?.getByMajor(selectedMajorId)
-                    }
-                    selectedClassId > 0 -> {
-                        Log.d("UpdateStudentList", "Fetching students by Class ID: $selectedClassId")
-                        AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()
-                            ?.getByClass(selectedClassId)
-                    }
-                    else -> {
-                        Log.d("UpdateStudentList", "Fetching all students")
-                        AppDatabase.getInstance(this@StudentListActivity)?.studentDAO()?.getAllWithRelations()
-                    }
-                }
-            }
-
-            // Log the fetched students for debugging
-            Log.d("UpdateStudentList", "Fetched Students: ${students?.size}")
-
-            // Update the RecyclerView adapter with the filtered list of students
-            if (students != null && students.isNotEmpty()) {
-                val nonNullStudents = ArrayList(students.filterNotNull())
-                Log.d("UpdateStudentList", "Non-null Students: ${nonNullStudents.size}")
-                studentListRecycleViewAdapter?.setFilteredList(nonNullStudents)
-            } else {
-                Log.d("UpdateStudentList", "No students found after filtering")
-                studentListRecycleViewAdapter?.resetFilteredList()
-            }
-
-            // Clear the search view and dismiss the dialog
-            searchViewStudent?.setQuery("", false)
-            searchViewStudent?.clearFocus()
-            bottomSheetDialog?.dismiss()
-        }
-    }
 
 
 
@@ -631,13 +587,12 @@ class StudentListActivity : AppCompatActivity() {
         behavior.isDraggable = false
         bottomSheetDialog!!.show()
 
-        // Get references to EditText fields
         val edtMajor = view.findViewById<EditText>(R.id.edtMajor)
         val edtClass = view.findViewById<EditText>(R.id.edtClass)
 
-        // Load all majors immediately
-
-        // Initially disable the class selection
+        // Reset selections
+        selectedMajorId = 0L
+        selectedClassId = 0L
         edtClass.isEnabled = false
 
         // Major selection
@@ -645,8 +600,7 @@ class StudentListActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val majorsList = withContext(Dispatchers.IO) {
-                        AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()
-                            ?.getAll() // Fetching all majors
+                        AppDatabase.getInstance(this@StudentListActivity)?.majorDAO()?.getAll()
                     }
                     majors = majorsList?.let { ArrayList(it) } ?: ArrayList()
                     majorNames = majors!!.mapNotNull { it.name } as ArrayList<String>
@@ -655,16 +609,17 @@ class StudentListActivity : AppCompatActivity() {
                     showSelectionDialog("Select Major", majorNames!!) { dialog, which ->
                         selectedMajorId = majors!![which].id
                         edtMajor.setText(majorNames!![which])
-                        edtClass.isEnabled = true // Enable class selection once a major is selected
-                        // Optionally, load classes for the selected major here
-                        loadClasses(selectedMajorId) // Load classes based on the selected major
+                        edtClass.isEnabled = true
+                        // Reset class selection when major changes
+                        selectedClassId = 0L
+                        edtClass.setText("")
+                        loadClasses(selectedMajorId)
                     }
                 } catch (e: Exception) {
                     Log.e("FilterDialog", "Error fetching majors: ${e.message}")
                 }
             }
         }
-
 
         // Class selection
         edtClass.setOnClickListener {
@@ -680,15 +635,85 @@ class StudentListActivity : AppCompatActivity() {
             }
         }
 
+        // Clear filters button
+        view.findViewById<View>(R.id.btnClear)?.setOnClickListener {
+            selectedMajorId = 0L
+            selectedClassId = 0L
+            edtMajor.setText("")
+            edtClass.setText("")
+            edtClass.isEnabled = false
+            updateStudentList()
+            bottomSheetDialog!!.dismiss()
+        }
+
         // Confirm button
         view.findViewById<View>(R.id.btnConfirm).setOnClickListener {
             updateStudentList()
-            edtMajor.setText("") // Clear major selection
-            edtClass.setText("")
+            bottomSheetDialog!!.dismiss()
         }
     }
 
+    private fun updateStudentList() {
+        lifecycleScope.launch {
+            try {
+                val students: List<StudentWithRelations?>? = withContext(Dispatchers.IO) {
+                    val db = AppDatabase.getInstance(this@StudentListActivity)
+                    when {
+                        selectedMajorId > 0 && selectedClassId > 0 -> {
+                            Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId and Class ID: $selectedClassId")
+                            db?.studentDAO()?.getByMajorClass(selectedMajorId, selectedClassId)
+                        }
+                        selectedMajorId > 0 -> {
+                            Log.d("UpdateStudentList", "Fetching students by Major ID: $selectedMajorId")
+                            db?.studentDAO()?.getByMajor(selectedMajorId)
+                        }
+                        selectedClassId > 0 -> {
+                            Log.d("UpdateStudentList", "Fetching students by Class ID: $selectedClassId")
+                            db?.studentDAO()?.getByClass(selectedClassId)
+                        }
+                        else -> {
+                            Log.d("UpdateStudentList", "Fetching all students")
+                            db?.studentDAO()?.getAllWithRelations()
+                        }
+                    }
+                }
 
+                withContext(Dispatchers.Main) {
+                    if (!students.isNullOrEmpty()) {
+                        val nonNullStudents = ArrayList(students.filterNotNull())
+                        Log.d("UpdateStudentList", "Found ${nonNullStudents.size} students")
+
+                        if (nonNullStudents.isEmpty()) {
+                            Toast.makeText(this@StudentListActivity, "No students found", Toast.LENGTH_SHORT).show()
+                            studentListRecycleViewAdapter?.resetFilteredList()
+                        } else {
+                            studentListRecycleViewAdapter?.setFilteredList(nonNullStudents)
+                        }
+                    } else {
+                        Log.d("UpdateStudentList", "No students found")
+                        Toast.makeText(this@StudentListActivity, "No students found", Toast.LENGTH_SHORT).show()
+                        studentListRecycleViewAdapter?.resetFilteredList()
+                    }
+
+                    // Clear search and dismiss dialog
+                    searchViewStudent?.apply {
+                        setQuery("", false)
+                        clearFocus()
+                    }
+                    bottomSheetDialog?.dismiss()
+                }
+            } catch (e: Exception) {
+                Log.e("UpdateStudentList", "Error updating student list", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        this@StudentListActivity,
+                        "Error updating student list: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
     private fun loadClasses(majorId: Long) {
         lifecycleScope.launch {
             try {

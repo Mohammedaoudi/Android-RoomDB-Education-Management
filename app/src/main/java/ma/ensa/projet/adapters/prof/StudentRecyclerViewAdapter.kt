@@ -10,7 +10,11 @@ import ma.ensa.projet.databinding.LecturerLayoutRecycleViewStudentBinding
 class StudentRecyclerViewAdapter : ListAdapter<String, StudentRecyclerViewAdapter.StudentViewHolder>(StudentDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StudentViewHolder {
-        val binding = LecturerLayoutRecycleViewStudentBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        val binding = LecturerLayoutRecycleViewStudentBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
+        )
         return StudentViewHolder(binding)
     }
 
@@ -19,15 +23,17 @@ class StudentRecyclerViewAdapter : ListAdapter<String, StudentRecyclerViewAdapte
         holder.bind(studentName)
     }
 
-    class StudentViewHolder(private val binding: LecturerLayoutRecycleViewStudentBinding) : RecyclerView.ViewHolder(binding.root) {
+    class StudentViewHolder(private val binding: LecturerLayoutRecycleViewStudentBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
         fun bind(studentName: String) {
-            binding.txtStudentName.text = studentName
+            binding.txtStudentName.text = studentName ?: "Unknown Student"
         }
     }
 
     class StudentDiffCallback : DiffUtil.ItemCallback<String>() {
         override fun areItemsTheSame(oldItem: String, newItem: String): Boolean {
-            return oldItem == newItem // Adjust this based on your unique identifier for students
+            return oldItem == newItem
         }
 
         override fun areContentsTheSame(oldItem: String, newItem: String): Boolean {

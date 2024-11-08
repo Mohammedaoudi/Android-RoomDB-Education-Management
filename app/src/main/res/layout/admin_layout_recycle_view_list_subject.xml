@@ -139,6 +139,41 @@
                 </LinearLayout>
 
                 <LinearLayout
+                    android:id="@+id/lecturer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginVertical="10dp"
+                    android:gravity="top"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:contentDescription="credits"
+                        android:src="@drawable/ic_lecturer1" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:fontFamily="@font/opensans_bold"
+                        android:text="Lecturer:"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+
+                    <TextView
+                        android:id="@+id/txtLecturer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:fontFamily="@font/opensans_bold"
+                        android:text="Not assigned"
+                        android:textColor="@color/white"
+                        android:textSize="20sp" />
+
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/credits"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

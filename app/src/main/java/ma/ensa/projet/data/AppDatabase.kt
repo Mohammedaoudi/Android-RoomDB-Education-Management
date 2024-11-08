@@ -27,7 +27,6 @@ import java.util.Calendar
         Subject::class,
         User::class,
         LecturerSubjectCrossRef::class,
-        StudentSemesterCrossRef::class,
         StudentSubjectCrossRef::class,
         SubjectSemesterCrossRef::class
     ],

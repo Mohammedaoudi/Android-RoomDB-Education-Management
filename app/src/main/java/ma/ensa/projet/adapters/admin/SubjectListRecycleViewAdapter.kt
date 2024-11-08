@@ -1,21 +1,18 @@
 package ma.ensa.projet.adapters.admin
 
 import android.content.Context
-import android.content.DialogInterface
 import android.content.Intent
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
-import android.view.View.OnLongClickListener
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Filter
 import android.widget.Filterable
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
@@ -28,9 +25,12 @@ import ma.ensa.projet.adapters.admin.listener.ItemClickListener
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.dto.SubjectWithRelations
 import ma.ensa.projet.data.entities.Classe
+import ma.ensa.projet.data.entities.Lecturer
+import ma.ensa.projet.data.entities.LecturerSubjectCrossRef
 import ma.ensa.projet.data.entities.Major
 import ma.ensa.projet.data.entities.Semester
 import ma.ensa.projet.data.entities.SubjectSemesterCrossRef
+import ma.ensa.projet.ui.admin.OpenClassActivity
 import ma.ensa.projet.ui.admin.StudentListActivity
 import ma.ensa.projet.utilities.Constants
 import ma.ensa.projet.utilities.Utils
@@ -59,6 +59,8 @@ class SubjectListRecycleViewAdapter(
 
     private var filteredList: ArrayList<SubjectWithRelations> = originalList
     private var currentFilterText = ""
+
+    private var shouldDissociateLecturer = false  // Nouvelle variable pour tracker l'état
 
 
 
@@ -99,21 +101,32 @@ class SubjectListRecycleViewAdapter(
             txtSubjectName.text = subjectWithRelations.subject.name
             txtClassName.text = subjectWithRelations.clazz.name
             txtMajorName.text = subjectWithRelations.major.name
-
             txtSubjectCredits.text = subjectWithRelations.subject.credits.toString()
 
-            // Fetch semester name using DAO
+            // Fetch semester name and lecturers using CrossRefDAO
             CoroutineScope(Dispatchers.IO).launch {
-                val semester =
-                    subjectWithRelations.semesterId?.let {
-                        AppDatabase.getInstance(context)?.semesterDAO()?.getById(
-                            it
-                        )
-                    }
+                val db = AppDatabase.getInstance(context)
+
+                // Fetch semester name
+                val semester = subjectWithRelations.semesterId?.let {
+                    db?.semesterDAO()?.getById(it)
+                }
+
+                // Fetch lecturers associated with the subject
+                // Fetch lecturers associated with the subject
+                val lecturerUsers = db?.crossRefDAO()?.getLecturerDetailsForSubject(subjectWithRelations.subject.id)
+
+                // Prepare lecturer names
+                val lecturerNames = lecturerUsers?.joinToString(", ") { it.fullName.toString() }
+                    ?: "Lecturer not assigned yet"
+
                 withContext(Dispatchers.Main) {
+                    if (lecturerNames.isNullOrEmpty()) {
+                        txtLecturer.text = "Not assigned yet"
+                    } else {
+                        txtLecturer.text = lecturerNames
+                    }
                     txtSemester.text = semester?.name ?: "N/A"
-                    semester?.name?.let { Log.d("EditSemestre", it) }
-                Log.d("EditSemestre2", subjectWithRelations.semesterId.toString())// Handle the case where semester is null
                 }
             }
 
@@ -135,45 +148,21 @@ class SubjectListRecycleViewAdapter(
                 AlertDialog.Builder(context)
                     .setTitle("Notification")
                     .setMessage("Confirm deletion of the subject?")
-                    .setPositiveButton("Yes") { _, _ -> deleteSubject(originalList.indexOf(subjectWithRelations)) }
+                    .setPositiveButton("Yes") { _, _ ->
+                        deleteSubject(originalList.indexOf(subjectWithRelations))
+                    }
                     .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
                     .show()
             }
         }
     }
 
-    override fun getItemCount(): Int = filteredList.size
 
-    override fun getFilter(): Filter {
-        return object : Filter() {
-            override fun performFiltering(charSequence: CharSequence): FilterResults {
-                currentFilterText = charSequence.toString()
-                val query = Utils.removeVietnameseAccents(currentFilterText.lowercase(Locale.getDefault()))
-
-                if (query != null) {
-                    filteredList = if (query.isEmpty()) {
-                        originalList
-                    } else {
-                        originalList.filter {
-                            Utils.removeVietnameseAccents(it.subject.name.lowercase(Locale.getDefault()))
-                                ?.contains(query)!!
-                        } as ArrayList<SubjectWithRelations>
-                    }
-                }
-
-                return FilterResults().apply { values = filteredList }
-            }
-
-            override fun publishResults(charSequence: CharSequence, filterResults: FilterResults) {
-                filteredList = filterResults.values as ArrayList<SubjectWithRelations>
-                notifyDataSetChanged()
-            }
-        }
-    }
 
 
     private fun showEditSubjectDialog(subjectWithRelations: SubjectWithRelations) {
-        val view = LayoutInflater.from(context).inflate(R.layout.admin_bottom_sheet_edit_subject, null)
+        val view =
+            LayoutInflater.from(context).inflate(R.layout.admin_bottom_sheet_edit_subject, null)
         bottomSheetDialog.setContentView(view)
         BottomSheetBehavior.from(view.parent as View).state = BottomSheetBehavior.STATE_EXPANDED
         bottomSheetDialog.show()
@@ -186,24 +175,90 @@ class SubjectListRecycleViewAdapter(
         val edtClassName: EditText = view.findViewById(R.id.edtClass)
         val edtMajorName: EditText = view.findViewById(R.id.edtMajor)
         val edtSemesterName: EditText = view.findViewById(R.id.edtSemester)
+        val edtLecturer: EditText = view.findViewById(R.id.edtLecturer)
 
-        // Populate fields with existing subject data
+        var selectedLecturerId: MutableSet<Long> = mutableSetOf() // Changé en Set
+        val lecturers = mutableListOf<Lecturer>()
+
+// Launching the coroutine to handle lecturer retrieval and UI update
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(context)
+                val lecturerSubjects =
+                    db?.crossRefDAO()?.getLecturerSubjects(subjectWithRelations.subject.id)
+                val allLecturers = db?.lecturerDAO()?.getAll()?.toMutableList() ?: mutableListOf()
+                lecturers.addAll(allLecturers)
+
+                lecturerSubjects?.forEach { crossRef ->
+                    val currentLecturer = allLecturers.find { it.id == crossRef.lecturerId }
+                    val user = currentLecturer?.let { db?.userDAO()?.getById(it.userId) }
+                    if (user != null) {
+                        selectedLecturerId.add(crossRef.lecturerId)
+                    }
+                }
+
+                val lecturerNames = lecturerSubjects?.mapNotNull { crossRef ->
+                    allLecturers.find { it.id == crossRef.lecturerId }?.let { lecturer ->
+                        db?.userDAO()?.getById(lecturer.userId)?.fullName
+                    }
+                } ?: listOf()
+
+                val displayText =
+                    if (lecturerNames.isEmpty()) "Not assigned" else lecturerNames.joinToString(", ")
+
+                withContext(Dispatchers.Main) {
+                    edtLecturer.setText(displayText)
+                    val btnDissociateLecturer: Button = view.findViewById(R.id.btnDissociateLecturer)
+
+                    // Set button visibility based on whether lecturers are assigned
+                    btnDissociateLecturer.visibility = if (selectedLecturerId.isNotEmpty()) View.VISIBLE else View.GONE
+
+                    if (displayText == "Not assigned") {
+                        edtLecturer.isFocusable = false
+                        edtLecturer.isClickable = false
+                        edtLecturer.setText("Not assigned")
+                    } else {
+                        edtLecturer.isFocusable = true
+                        edtLecturer.isClickable = true
+                        edtLecturer.setOnClickListener {
+                            showLecturerSelectionDialog(
+                                lecturers,
+                                subjectWithRelations,
+                                selectedLecturerId,
+                                edtLecturer,
+                                view
+                            )
+                        }
+                    }
+
+                    // Move button click listener here
+                    btnDissociateLecturer.setOnClickListener {
+                        AlertDialog.Builder(context)
+                            .setTitle("Confirm Dissociation")
+                            .setMessage("Are you sure you want to dissociate the lecturer from this subject?")
+                            .setPositiveButton("Yes") { _, _ ->
+                                shouldDissociateLecturer = true
+                                selectedLecturerId.clear()
+                                edtLecturer.setText("Not assigned")
+                                btnDissociateLecturer.visibility = View.GONE
+                            }
+                            .setNegativeButton("No", null)
+                            .show()
+                    }
+                }            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        // Populate other fields as before...
         edtSubjectName.setText(subjectWithRelations.subject.name)
         edtSubjectCredits.setText(subjectWithRelations.subject.credits.toString())
         edtClassName.setText(subjectWithRelations.clazz.name)
         edtMajorName.setText(subjectWithRelations.major.name)
-
         selectedSemesterId = subjectWithRelations.semesterId
         edtSemesterName.setText(semesters.find { it.id == selectedSemesterId }?.name)
-        Log.d("tatatt", edtSemesterName.text.toString())
 
-        // Initially disable class and semester selection until a major is selected
-        edtClassName.isEnabled = true
-        edtSemesterName.isEnabled = true  // Enable since we have both major and class
-
-        updateSemestersForMajor(selectedMajor!!.id, view)
-
-        // Major selection
         edtMajorName.setOnClickListener {
             if (majorNames.isNotEmpty()) {
                 AlertDialog.Builder(context)
@@ -218,9 +273,9 @@ class SubjectListRecycleViewAdapter(
                         // Clear previous selections
                         edtClassName.setText("") // Clear class selection
                         edtSemesterName.setText("") // Clear semester selection
-                        edtClassName.isEnabled = true // Enable class selection now that major is selected
+                        edtClassName.isEnabled =
+                            true // Enable class selection now that major is selected
                         edtSemesterName.isEnabled = false
-
                     }
                     .show()
             } else {
@@ -251,46 +306,146 @@ class SubjectListRecycleViewAdapter(
 
         // Semester selection
         edtSemesterName.setOnClickListener {
-            if (selectedMajor == null ) {
-            Utils.showToast(context, "Please select a major first")
+            if (selectedMajor == null) {
+                Utils.showToast(context, "Please select a major first")
 
-          } else {
-            val majorSemesters = semesters.filter { it.majorId == selectedMajor!!.id }
-            val majorSemesterNames = majorSemesters.map { it.name }.toTypedArray()
+            } else {
+                val majorSemesters = semesters.filter { it.majorId == selectedMajor!!.id }
+                val majorSemesterNames = majorSemesters.map { it.name }.toTypedArray()
 
-            if (majorSemesterNames.isEmpty()) {
-                Utils.showToast(context, "No semesters available for the selected major")
+                if (majorSemesterNames.isEmpty()) {
+                    Utils.showToast(context, "No semesters available for the selected major")
+                    return@setOnClickListener
+                }
+
+                AlertDialog.Builder(context)
+                    .setTitle("Select Semester")
+                    .setItems(majorSemesterNames) { _, which ->
+                        selectedSemesterId = majorSemesters[which].id
+                        edtSemesterName.setText(majorSemesterNames[which])
+                    }
+                    .show()
+            }
+        }
+
+        val btnDissociateLecturer: Button = view.findViewById(R.id.btnDissociateLecturer)
+        btnDissociateLecturer.setOnClickListener {
+            AlertDialog.Builder(context)
+                .setTitle("Confirm Dissociation")
+                .setMessage("Are you sure you want to dissociate the lecturer from this subject?")
+                .setPositiveButton("Yes") { _, _ ->
+                    // Mettre à jour selectedLecturerId immédiatement
+                    selectedLecturerId.clear()
+                    edtLecturer.setText("Not assigned")
+                    btnDissociateLecturer.visibility = View.GONE
+
+                    // Effectuer la dissociation dans la base de données
+                    dissociateLecturerFromSubject(subjectWithRelations.subject.id)
+                }
+                .setNegativeButton("No", null)
+                .show()
+        }
+
+        val btnEdit: Button = view.findViewById(R.id.btnEditSubject)
+        btnEdit.setOnClickListener {
+            // Récupérer les valeurs des champs
+            val newName = edtSubjectName.text.toString().trim()
+            val newCredits = edtSubjectCredits.text.toString().trim()
+
+            // Validation des champs
+            if (newName.isEmpty() || newCredits.isEmpty()) {
+                Utils.showToast(context, "Please fill in all required fields")
+                return@setOnClickListener
+            }
+
+            if (selectedClass == null || selectedMajor == null || selectedSemesterId == -1L) {
+                Utils.showToast(context, "Please select class, major and semester")
                 return@setOnClickListener
             }
 
             AlertDialog.Builder(context)
-                .setTitle("Select Semester")
-                .setItems(majorSemesterNames) { _, which ->
-                    selectedSemesterId = majorSemesters[which].id
-                    edtSemesterName.setText(majorSemesterNames[which])
-                }
-                .show()
-            }
-        }
-
-        // Edit button action
-        val btnEdit: Button = view.findViewById(R.id.btnEditSubject)
-        btnEdit.setOnClickListener {
-            AlertDialog.Builder(context)
                 .setTitle("Notification")
                 .setMessage("Confirm edit of subject information?")
-                .setPositiveButton("Yes") { _, _ -> performEditSubject(subjectWithRelations, view) }
+                .setPositiveButton("Yes") { _, _ ->
+                    try {
+                        performEditSubject(
+                            subjectWithRelations,
+                            view,
+                            selectedLecturerId
+                        ) // Pass selectedLecturerId here
+                        bottomSheetDialog.dismiss()
+                    } catch (e: Exception) {
+                        Utils.showToast(context, "Error updating subject: ${e.message}")
+                    }
+                }
                 .setNegativeButton("No") { dialog, _ -> dialog.dismiss() }
                 .show()
         }
     }
-    private fun performEditSubject(subjectWithRelations: SubjectWithRelations, view: View) {
+
+    private fun showLecturerSelectionDialog(
+        lecturers: List<Lecturer>,
+        subjectWithRelations: SubjectWithRelations,
+        selectedLecturerIds: MutableSet<Long>,
+        edtLecturer: EditText,
+        view: View
+    ) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val lecturerNames = lecturers.map { lecturer ->
+                val user = AppDatabase.getInstance(context).userDAO().getById(lecturer.userId)
+                user?.fullName ?: "Unknown Lecturer"
+            }.toMutableList()
+
+            val checkedItems = BooleanArray(lecturers.size) { false }
+
+            lecturers.forEachIndexed { index, lecturer ->
+                checkedItems[index] = selectedLecturerIds.contains(lecturer.id)
+            }
+
+            withContext(Dispatchers.Main) {
+                AlertDialog.Builder(context)
+                    .setTitle("Select Lecturers")
+                    .setMultiChoiceItems(
+                        lecturerNames.toTypedArray(),
+                        checkedItems
+                    ) { _, which, isChecked ->
+                        if (isChecked) {
+                            selectedLecturerIds.add(lecturers[which].id)
+                        } else {
+                            selectedLecturerIds.remove(lecturers[which].id)
+                        }
+
+                        val selectedNames = selectedLecturerIds.mapNotNull { id ->
+                            lecturers.find { it.id == id }?.let { lecturer ->
+                                lecturerNames[lecturers.indexOf(lecturer)]
+                            }
+                        }
+                        edtLecturer.setText(selectedNames.joinToString(", "))
+
+                        // Update dissociate button visibility
+                        val btnDissociateLecturer: Button = view.findViewById(R.id.btnDissociateLecturer)
+                        btnDissociateLecturer.visibility = if (selectedLecturerIds.isNotEmpty()) View.VISIBLE else View.GONE
+
+                    }
+                    .setPositiveButton("OK", null)
+                    .setNegativeButton("Cancel") { dialog, _ -> dialog.dismiss() }
+                    .create()
+                    .show()
+            }
+        }
+    }
+
+    private fun performEditSubject(
+        subjectWithRelations: SubjectWithRelations,
+        view: View,
+        selectedLecturerIds: Set<Long>
+    ) {
         if (!validateInputs(view)) return
 
         val edtSubjectName: EditText = view.findViewById(R.id.edtSubjectName)
         val edtSubjectCredits: EditText = view.findViewById(R.id.edtSubjectCredits)
+        val edtLecturer: EditText = view.findViewById(R.id.edtLecturer) // Ajoutez cette ligne
 
-        // Update the subjectWithRelations object with new data
         subjectWithRelations.subject.apply {
             name = edtSubjectName.text.toString()
             credits = edtSubjectCredits.text.toString().toIntOrNull() ?: 0
@@ -300,7 +455,7 @@ class SubjectListRecycleViewAdapter(
 
         subjectWithRelations.clazz = selectedClass!!
         subjectWithRelations.major = selectedMajor!!
-        subjectWithRelations.semesterId = selectedSemesterId  // Update the semesterId
+        subjectWithRelations.semesterId = selectedSemesterId
 
         val position = filteredList.indexOfFirst { it.subject.id == subjectWithRelations.subject.id }
         if (position != -1) {
@@ -308,25 +463,33 @@ class SubjectListRecycleViewAdapter(
                 try {
                     val db = AppDatabase.getInstance(context)
 
-                    // Update the subject in the database
+                    // Update subject
                     db?.subjectDAO()?.update(subjectWithRelations.subject)
 
-                    // First delete existing cross reference
+                    // Update semester association
                     db?.subjectSemesterCrossRefDAO()?.deleteBySubjectId(subjectWithRelations.subject.id)
-
-                    // Then insert the new cross reference
                     selectedSemesterId?.let { semesterId ->
                         val crossRef = SubjectSemesterCrossRef(
                             subjectId = subjectWithRelations.subject.id,
                             semesterId = semesterId
                         )
                         db?.subjectSemesterCrossRefDAO()?.insert(crossRef)
+                    }
 
-                        Log.d("openclassTest", "Inserted semesterId: $semesterId for subjectId: ${subjectWithRelations.subject.id}")
-
-                        // Verification step: Retrieve and log to confirm semesterId is saved
-                        val verifSub = db?.subjectDAO()?.getSubjectsWithRelationsByClassId(subjectWithRelations.clazz.id)
-                        Log.d("openclassTest", "Verified Subject: ${verifSub}")
+                    // Vérifier si "Not assigned" est sélectionné
+                    if (edtLecturer.text.toString() == "Not assigned") {
+                        // Dissocier tous les professeurs
+                        db?.crossRefDAO()?.deleteLecturerSubjectCrossRefBySubjectId(subjectWithRelations.subject.id)
+                    } else if (selectedLecturerIds.isNotEmpty()) {
+                        // Mettre à jour les associations normalement
+                        db?.crossRefDAO()?.deleteLecturerSubjectCrossRefBySubjectId(subjectWithRelations.subject.id)
+                        selectedLecturerIds.forEach { lecturerId ->
+                            val lecturerCrossRef = LecturerSubjectCrossRef(
+                                lecturerId = lecturerId,
+                                subjectId = subjectWithRelations.subject.id
+                            )
+                            db?.crossRefDAO()?.insertLecturerSubjectCrossRef(lecturerCrossRef)
+                        }
                     }
 
                     withContext(Dispatchers.Main) {
@@ -335,8 +498,6 @@ class SubjectListRecycleViewAdapter(
                             notifyItemChanged(position)
                             bottomSheetDialog.dismiss()
                             Utils.showToast(context, "Successfully edited")
-                        } else {
-                            Utils.showToast(context, "Position out of bounds for filtered list")
                         }
                     }
                 } catch (e: Exception) {
@@ -345,11 +506,43 @@ class SubjectListRecycleViewAdapter(
                     }
                 }
             }
-        } else {
-            Utils.showToast(context, "Subject not found in the list")
         }
     }
 
+
+
+
+
+
+
+
+
+
+    private fun dissociateLecturerFromSubject(subjectId: Long) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(context)
+                db?.crossRefDAO()?.deleteLecturerSubjectCrossRefBySubjectId(subjectId)
+
+                withContext(Dispatchers.Main) {
+                    Utils.showToast(context, "Lecturer dissociated successfully")
+
+                    // Mise à jour de l'interface utilisateur
+                    val position = filteredList.indexOfFirst { it.subject.id == subjectId }
+                    if (position != -1) {
+                        // Mettre à jour l'objet dans la liste
+                        val updatedSubject = filteredList[position].copy()
+                        filteredList[position] = updatedSubject
+                        notifyItemChanged(position)
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Utils.showToast(context, "Error dissociating lecturer: ${e.message}")
+                }
+            }
+        }
+    }
     private fun updateClassesForMajor(selectedMajorId: Long, view: View) {
         CoroutineScope(Dispatchers.Main).launch {            // Fetch classes asynchronously based on major
             val allClasses = withContext(Dispatchers.IO) {
@@ -425,6 +618,34 @@ class SubjectListRecycleViewAdapter(
         }
     }
 
+    override fun getItemCount(): Int = filteredList.size
+
+    override fun getFilter(): Filter {
+        return object : Filter() {
+            override fun performFiltering(charSequence: CharSequence): FilterResults {
+                currentFilterText = charSequence.toString()
+                val query = Utils.removeVietnameseAccents(currentFilterText.lowercase(Locale.getDefault()))
+
+                if (query != null) {
+                    filteredList = if (query.isEmpty()) {
+                        originalList
+                    } else {
+                        originalList.filter {
+                            Utils.removeVietnameseAccents(it.subject.name.lowercase(Locale.getDefault()))
+                                ?.contains(query)!!
+                        } as ArrayList<SubjectWithRelations>
+                    }
+                }
+
+                return FilterResults().apply { values = filteredList }
+            }
+
+            override fun publishResults(charSequence: CharSequence, filterResults: FilterResults) {
+                filteredList = filterResults.values as ArrayList<SubjectWithRelations>
+                notifyDataSetChanged()
+            }
+        }
+    }
 
     private fun validateInputs(view: View): Boolean {
         return validateNotEmpty(view, R.id.edtSubjectName, "Subject name cannot be empty") &&
@@ -448,6 +669,7 @@ class SubjectListRecycleViewAdapter(
 
         val txtSubjectName: TextView = itemView.findViewById(R.id.txtSubjectName)
         val txtClassName: TextView = itemView.findViewById(R.id.txtClassName)
+        val txtLecturer: TextView = itemView.findViewById(R.id.txtLecturer)
         val txtMajorName: TextView = itemView.findViewById(R.id.txtMajorName)
         val txtSubjectCredits: TextView = itemView.findViewById(R.id.txtSubjectCredits)
         val txtSemester: TextView = itemView.findViewById(R.id.txtSemester)
@@ -474,4 +696,6 @@ class SubjectListRecycleViewAdapter(
             return true
         }
     }
+
+
 }

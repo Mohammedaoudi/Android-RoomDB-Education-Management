@@ -2,6 +2,7 @@ package ma.ensa.projet.adapters.prof
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -26,7 +27,8 @@ class SemesterRecyclerViewAdapter(
     private val context: Context,
     private val intent: Intent,
     semesters: ArrayList<Semester>,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val lecturerId: Long // Accept lecturerId
 ) : RecyclerView.Adapter<SemesterRecyclerViewAdapter.SemesterViewHolder>(), Filterable {
 
     private val originalList: ArrayList<Semester> = semesters
@@ -47,20 +49,30 @@ class SemesterRecyclerViewAdapter(
             val tempClassMap = mutableMapOf<Long, String>()
             val db = AppDatabase.getInstance(context)
 
+            // First, get all subject IDs assigned to this lecturer
+            val lecturerSubjectIds = db.crossRefDAO().getSubjectsByLecturer(lecturerId)
+            Log.d("hnaaaaaa", "Subject IDs for lecturer $lecturerId: $lecturerSubjectIds")
+
             for (semester in originalList) {
-                // Fetch subjects for each semester
-                val subjects = db.subjectDAO().getBySemester(semester.id)
-                val subjectNames = subjects.map { it.subject.name }
-                tempSubjectMap[semester.id] = subjectNames
+                // Fetch subjects with relations (including class and major) for each semester
+                val subjectsWithRelations = db.subjectDAO().getBySemester(semester.id)
+                Log.d("hnaaaaaa", "Subjects in semester ${semester.id}: $subjectsWithRelations")
 
-                // Fetch and store major name for each semester's major ID
-                val major = semester.majorId?.let { db.majorDAO().getById(it) }
-                tempMajorMap[semester.id] = major?.name ?: "Unknown Major"
+                // Filter subjects to include only those that are assigned to the lecturer
+                val lecturerSubjects = subjectsWithRelations
+                    .filter { subject -> lecturerSubjectIds.contains(subject.subject.id) }
+                    .map { it.subject.name }
 
-                // Fetch and store class name for each subject’s class ID in the semester
-                val classEntity = subjects.firstOrNull()?.subject?.classId?.let { db.classDAO().getById(it) }
-                tempClassMap[semester.id] = classEntity?.name ?: "Unknown Class"
+                Log.d("hnaaaaaa", "Filtered subjects for lecturer: $lecturerSubjects")
+
+                // Only add the semester to the map if there are subjects the lecturer is assigned to
+                if (lecturerSubjects.isNotEmpty()) {
+                    tempSubjectMap[semester.id] = lecturerSubjects
+                    tempMajorMap[semester.id] = subjectsWithRelations.firstOrNull()?.major?.name ?: "Unknown Major"
+                    tempClassMap[semester.id] = subjectsWithRelations.firstOrNull()?.clazz?.name ?: "Unknown Class"
+                }
             }
+
             subjectMap = tempSubjectMap
             majorMap = tempMajorMap
             classMap = tempClassMap
@@ -70,7 +82,6 @@ class SemesterRecyclerViewAdapter(
             }
         }
     }
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SemesterViewHolder {
         val view = LayoutInflater.from(context).inflate(R.layout.z_layout_recycle_view_semester, parent, false)
         return SemesterViewHolder(view)
@@ -79,8 +90,12 @@ class SemesterRecyclerViewAdapter(
     override fun onBindViewHolder(holder: SemesterViewHolder, position: Int) {
         val semester = filteredList[position]
         val majorName = majorMap[semester.id] ?: "Unknown Major"
+        val className = classMap[semester.id] ?: "Unknown Class"  // Get the class name from classMap
 
-        holder.txtSemesterName.text = "${semester.name} - $majorName"
+        // Set the text for the semester, major, and class names
+        holder.txtSemesterName.text = "${semester.name} - $majorName - $className"
+
+        // Set the subjects (this will show the filtered subjects for the lecturer)
         holder.txtSubjects.text = subjectMap[semester.id]?.joinToString(", ") ?: "No subjects"
 
         // Handle item click to show students of the class
@@ -92,13 +107,11 @@ class SemesterRecyclerViewAdapter(
                     // Assuming you want to get the classId from the first subject
                     val classId = subjects[0].clazz.id // or handle it differently if needed
 
-                    // Fetch the class name (if needed, depending on your implementation)
-                    val classEntity = AppDatabase.getInstance(context).classDAO().getById(classId)
-                    val className = classEntity?.name ?: "Unknown Class"
-
                     // Start the StudentListActivity with the classId
                     val intent = Intent(context, StudentsInClassActivity::class.java)
                     intent.putExtra("CLASS_ID", classId) // Pass the class ID to the next activity
+                    intent.putExtra("MAJOR_ID", subjects[0].major.id)  // Pass the majorId
+
                     context.startActivity(intent)
                 } else {
                     // Handle case where there are no subjects

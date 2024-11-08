@@ -25,6 +25,20 @@ interface SubjectDAO {
     """)
     fun getAllWithRelations(): List<SubjectWithRelations>
 
+    @Query("""
+    SELECT s.*, ssr.semester_id AS semesterId, 
+           c.id AS classId, c.name AS className, 
+           m.id AS majorId, m.name AS majorName
+    FROM subjects s
+    LEFT JOIN subject_semester_cross_ref ssr ON s.id = ssr.subject_id
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN majors m ON s.major_id = m.id
+    WHERE s.major_id = :majorId AND ssr.semester_id = :semesterId
+    ORDER BY s.name
+""")
+    fun getByMajorAndSemester(majorId: Long, semesterId: Long): List<SubjectWithRelations>
+
+
 
     @Query("""
     SELECT s.*, ssr.semester_id AS semesterId, 

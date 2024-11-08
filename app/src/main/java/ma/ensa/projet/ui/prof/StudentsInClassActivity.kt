@@ -1,3 +1,4 @@
+
 package ma.ensa.projet.ui.prof
 
 import android.os.Bundle
@@ -23,12 +24,15 @@ class StudentsInClassActivity : AppCompatActivity() {
     private lateinit var studentAdapter: StudentRecyclerViewAdapter
     private lateinit var studentDao: StudentDAO
     private var selectedClassId: Long = 0
+    private var selectedMajorId: Long = 0  // Add majorId
     private lateinit var rvStudent: RecyclerView
     private lateinit var btnBack: ImageView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.lecturer_layout_studentinclass_activity)
+
+        Log.d("StudentsInClassActivity", "onCreate called")  // Verify onCreate is being triggered
 
         // Initialize views
         rvStudent = findViewById(R.id.rvStudent)
@@ -42,21 +46,15 @@ class StudentsInClassActivity : AppCompatActivity() {
 
         // Retrieve class ID from the intent
         selectedClassId = intent.getLongExtra("CLASS_ID", -1)
+        selectedMajorId = intent.getLongExtra("MAJOR_ID", -1)
         if (selectedClassId != -1L) {
             lifecycleScope.launch {
-                fetchStudentsForClass(selectedClassId)
+                fetchStudentsForClassAndMajor(selectedClassId, selectedMajorId)  // Ensure you're passing both class and major IDs
             }
         }
 
         // Back button functionality
         btnBack.setOnClickListener { finish() }
-
-        // Handle window insets for layout padding
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layoutStudent)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
-            insets
-        }
     }
 
     private fun setupRecyclerView() {
@@ -65,26 +63,37 @@ class StudentsInClassActivity : AppCompatActivity() {
         rvStudent.adapter = studentAdapter
     }
 
-    private suspend fun fetchStudentsForClass(classId: Long) {
-        // Fetch students for the specified class ID
-        val studentsWithRelations = withContext(Dispatchers.IO) {
-            studentDao.getByClass(classId) // Ensure this method is a suspend function
-        }
+    private suspend fun fetchStudentsForClassAndMajor(classId: Long, majorId: Long) {
+        try {
+            Log.d("StudentsInClassActivity", "Executing query for Class ID: $classId, Major ID: $majorId")
 
-        Log.d("StudentsInClassActivity", "Fetched students Size: ${studentsWithRelations.size}")
+            val studentsWithRelations = withContext(Dispatchers.IO) {
+                studentDao.getByClassAndMajor(classId, majorId)
+            }
 
-        val studentNames = studentsWithRelations.map { it.user.fullName } // Assuming 'student' is a property and 'name' is a field of Student
-        Log.d("StudentsInClassActivity", "Selected class ID: $selectedClassId")
+            Log.d("StudentsInClassActivity", "Fetched students Size: ${studentsWithRelations.size}")
 
-        if (studentNames.isNotEmpty()) {
-            studentAdapter.submitList(studentNames) // Now pass the list of names
-        } else {
-            showNoStudentsMessage()
+            val studentNames = studentsWithRelations.map { it.user.fullName }
+            Log.d("StudentsInClassActivity", "Raw students data: ${studentsWithRelations.map {
+                "Student ID: ${it.student.id}, User: ${it.user.fullName}, Class ID: ${it.student.classId}, Major ID: ${it.student.majorId}"
+            }}")
+
+            withContext(Dispatchers.Main) {
+                if (studentNames.isNotEmpty()) {
+                    studentAdapter.submitList(studentNames)
+                } else {
+                    showNoStudentsMessage()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("StudentsInClassActivity", "Error fetching students", e)
+            withContext(Dispatchers.Main) {
+                Snackbar.make(rvStudent, "Error loading students", Snackbar.LENGTH_SHORT).show()
+            }
         }
     }
 
-
     private fun showNoStudentsMessage() {
-        Snackbar.make(rvStudent, "No students found for this class.", Snackbar.LENGTH_SHORT).show()
+        Snackbar.make(rvStudent, "No students found for this class and major.", Snackbar.LENGTH_SHORT).show()
     }
 }

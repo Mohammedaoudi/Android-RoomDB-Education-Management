@@ -15,6 +15,9 @@ import kotlinx.coroutines.launch
 import ma.ensa.projet.R
 import ma.ensa.projet.data.AppDatabase
 import android.view.animation.AccelerateDecelerateInterpolator
+import androidx.room.Query
+import kotlinx.coroutines.withContext
+import ma.ensa.projet.data.entities.SubjectSemesterCrossRef
 
 class SplashActivity : AppCompatActivity() {
 
@@ -34,6 +37,8 @@ class SplashActivity : AppCompatActivity() {
 
         CoroutineScope(Dispatchers.Main).launch {
             // Initialize the database you can comment this after
+
+
 //            AppDatabase.initializeDatabase(this@SplashActivity)
 
             delay(3000)
@@ -42,8 +47,7 @@ class SplashActivity : AppCompatActivity() {
             val intent = Intent(this@SplashActivity, LoginActivity::class.java)
             startActivity(intent)
             finish()
-        }
-    }
+        }    }
 
     private fun startAnimations() {
         val logoFade = ObjectAnimator.ofFloat(logo, View.ALPHA, 0f, 1f)

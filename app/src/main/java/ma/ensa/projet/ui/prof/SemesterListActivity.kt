@@ -19,6 +19,7 @@ import ma.ensa.projet.R
 import ma.ensa.projet.adapters.prof.SemesterRecyclerViewAdapter
 import ma.ensa.projet.data.AppDatabase
 import ma.ensa.projet.data.entities.LecturerSubjectCrossRef
+import ma.ensa.projet.data.entities.Semester
 import ma.ensa.projet.utilities.Constants
 
 
@@ -69,23 +70,25 @@ class SemesterListActivity : AppCompatActivity() {
                     return@launch
                 }
 
-                // Debug ALL existing data using lecturer ID
-                val allLecturerSubjects = db.crossRefDAO().getAllLecturerSubjectCrossRef()
-                val allSubjectSemesters = db.crossRefDAO().getAllSubjectSemesterCrossRef()
+                // Fetch all subject IDs taught by the lecturer
+                val lecturerSubjectIds =
+                    db.crossRefDAO().getSubjectsByLecturer(lecturer.id).map { it }
 
-                // Debug data for specific lecturer
-                val lecturerSubjects = db.crossRefDAO().getLecturerSubjects(lecturer.id)
-                val semesters = db.crossRefDAO().getSemestersByLecturerId(lecturer.id)
-
-                Log.d("SemesterListActivityCheck", "User ID: $userId")
-                Log.d("SemesterListActivityCheck", "Lecturer ID: ${lecturer.id}")
-                Log.d("SemesterListActivityCheck", "ALL Lecturer-Subject relationships: $allLecturerSubjects")
-                Log.d("SemesterListActivityCheck", "ALL Subject-Semester relationships: $allSubjectSemesters")
-                Log.d("SemesterListActivityCheck", "This Lecturer's Subjects: $lecturerSubjects")
-                Log.d("SemesterListActivityCheck", "Final Semesters result: $semesters")
+                // Fetch all semesters for the lecturer's subjects
+                val relevantSemesters = mutableListOf<Semester>()
+                for (subjectId in lecturerSubjectIds) {
+                    val semesters = db.semesterDAO().getAll() // Get all semesters
+                    for (semester in semesters) {
+                        // Check if the subject is part of this semester
+                        val subjectsInSemester = db.subjectDAO().getBySemester(semester.id)
+                        if (subjectsInSemester.any { it.subject.id == subjectId }) {
+                            relevantSemesters.add(semester) // Add semester if relevant
+                        }
+                    }
+                }
 
                 withContext(Dispatchers.Main) {
-                    if (semesters.isEmpty()) {
+                    if (relevantSemesters.isEmpty()) {
                         Toast.makeText(
                             this@SemesterListActivity,
                             "No semesters found for this lecturer",
@@ -93,11 +96,13 @@ class SemesterListActivity : AppCompatActivity() {
                         ).show()
                     }
 
+                    // Create adapter with filtered semesters
                     semesterRecycleViewAdapter = SemesterRecyclerViewAdapter(
                         this@SemesterListActivity,
                         intent,
-                        ArrayList(semesters),
-                        lifecycleScope
+                        ArrayList(relevantSemesters),
+                        lifecycleScope ,
+                        lecturer.id
                     )
                     rvSemester.layoutManager = LinearLayoutManager(this@SemesterListActivity)
                     rvSemester.adapter = semesterRecycleViewAdapter
@@ -114,6 +119,9 @@ class SemesterListActivity : AppCompatActivity() {
             }
         }
     }
+
+
+
     private fun handleEventListener() {
         layoutSemester.setOnClickListener {
             searchViewSemester.clearFocus()

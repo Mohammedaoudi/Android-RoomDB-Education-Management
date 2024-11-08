@@ -18,6 +18,10 @@ interface SubjectSemesterCrossRefDAO {
     @Insert
     fun insertAll(crossRefs: List<SubjectSemesterCrossRef>)
 
+
+    @Query("SELECT subject_id FROM subject_semester_cross_ref WHERE semester_id = :semesterId")
+    fun getSubjectIdForSemester(semesterId: Long): List<Long>
+
     @Delete
     fun delete(crossRef: SubjectSemesterCrossRef)
 
