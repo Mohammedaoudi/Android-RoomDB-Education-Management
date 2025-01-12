@@ -28,8 +28,13 @@ This mobile application is designed for managing educational processes at ENSAJ 
 ## 🎬 Demo
 
 ### Video Demo
-[Click here to watch the demo video](your-video-link)
+<div align="center">
 
+
+[Click here to watch the demo video](https://github.com/user-attachments/assets/1155bc4f-1d23-4b3e-aef3-135cfb54e8f0)
+
+
+</div>
 
 
 ## ⚙️ Technical Requirements
